@@ -35,6 +35,13 @@ O primeiro uso também precisa das configurações do Firebase descritas acima. 
 
 As tarefas, notas, água, cuidados pessoais e exercícios extras são atualizados ao vivo nos dois lados. As demais áreas podem ser consultadas e editadas pelo site a partir do backup; depois de uma edição web, puxe a tela para baixo no app Android para aplicar a mudança e sincronizar o backup combinado. Esse fluxo exige a versão Android atualizada com o suporte a alterações do site. Dados antigos que estejam só no armazenamento local do telefone não são enviados automaticamente; use **Importar backup** para trazer tarefas, notas, água, cuidados e exercícios que já tenham sido salvos na nuvem. Os dois dispositivos precisam usar a mesma conta Google.
 
+## Notícias, pontuação e patentes
+
+- A aba **Notícias** mostra os avisos para qualquer usuário que tenha entrado no site. O botão para publicar e os controles para editar/excluir aparecem somente quando a conta conectada é `sotrabalho683@gmail.com`.
+- Para aplicar essa restrição também no banco, atualize as regras do Realtime Database usando a seção `news` de `realtime-database-rules.example.json`. Preserve as regras existentes do app e acrescente essa seção dentro de `rules`; não abra o banco para acesso público. A leitura é permitida a usuários autenticados e a escrita exige o e-mail administrador.
+- A pontuação e a patente são lidas do backup enviado pelo app. A patente usa os mesmos limites, nomes, faixa de segurança para rebaixamento e insígnias do aplicativo. Deixe o app conectado e abra-o com internet para sincronizar o backup.
+- As tarefas com prazo seguem as mesmas cores de urgência do aplicativo: cinza sem prazo/mais distante, verde quando faltam até 20 horas, amarelo até 8 horas, vermelho até 3 horas, vermelho forte até 1 hora e preto depois do vencimento.
+
 ## Segurança
 
 O objeto de configuração Firebase identifica o projeto, mas a autorização deve continuar sendo feita pelo Firebase Authentication e pelas regras do Realtime Database. Não deixe o banco aberto para leitura ou escrita pública. Nunca compartilhe arquivos de credencial de conta de serviço.
