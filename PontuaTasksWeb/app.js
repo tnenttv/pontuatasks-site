@@ -7,14 +7,20 @@ const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const database = getDatabase(firebaseApp);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, section: "tarefas", filter: "todas", data: { tarefas: {}, notas: {}, cuidados: {}, agua: {}, treinos_extras: {}, exercicios_dias: {}, cuidados_dias: {} }, backup: {}, backupCategory: "diary_local", listeners: [], editId: null, editIndex: null, toastTimer: null };
+const ADMIN_EMAIL = "sotrabalho683@gmail.com";
+const LEVEL_THRESHOLDS = [0,50,100,180,280,400,550,750,1000,1300,1650,2050,2500,3000,3550,4150,4800,5500];
+const LEVEL_FLOORS = [0,35,70,140,220,330,470,650,880,1150,1450,1800,2200,2650,3150,3700,4300,4800];
+const LEVEL_NAMES = ["Recruta","Soldado","Cabo","3º Sargento","2º Sargento","1º Sargento","Subtenente","Aspirante","2º Tenente","1º Tenente","Capitão","Major","Tenente-Coronel","Coronel","General de Brigada","General de Divisão","General de Exército","General"];
+const state = { user: null, section: "inicio", filter: "todas", data: { tarefas: {}, notas: {}, cuidados: {}, agua: {}, treinos_extras: {}, exercicios_dias: {}, cuidados_dias: {} }, backup: {}, news: {}, backupCategory: "diary_local", listeners: [], editId: null, editIndex: null, toastTimer: null };
 const sections = {
+  inicio: { title: "Visão geral", subtitle: "Tudo que está em aberto ou vence hoje, em um só lugar.", add: "Nova tarefa", node: "tarefas", empty: "Nada pendente por aqui", emptyCopy: "Suas tarefas, cuidados e exercícios em aberto aparecerão nesta página." },
   tarefas: { title: "Suas tarefas", subtitle: "Organize o que importa e comemore cada avanço.", add: "Nova tarefa", node: "tarefas", empty: "Tudo começa com um primeiro passo", emptyCopy: "Adicione uma tarefa e ela aparecerá aqui e no aplicativo." },
   cuidados: { title: "Cuidados pessoais", subtitle: "Pequenos hábitos que ajudam você a se sentir bem.", add: "Novo cuidado", node: "cuidados", empty: "Um cuidado de cada vez", emptyCopy: "Adicione um cuidado pessoal para acompanhar sua rotina." },
   agua: { title: "Sua hidratação", subtitle: "Acompanhe a água que você bebe ao longo do dia.", add: "Registrar água", node: "agua", empty: "Ainda não há registros de hoje", emptyCopy: "Registre um copo de água para começar." },
   notas: { title: "Suas notas", subtitle: "Ideias e lembretes rápidos, sempre à mão.", add: "Nova nota", node: "notas", empty: "Guarde uma ideia por aqui", emptyCopy: "Suas notas ficam disponíveis no site e no app." },
   exercicios: { title: "Seus exercícios", subtitle: "Uma rotina simples, registrada junto com o app.", add: "Novo exercício", node: "treinos_extras", empty: "Monte sua rotina", emptyCopy: "Adicione um exercício para organizar seus treinos." },
-  mais: { title: "Mais áreas do app", subtitle: "Seus outros dados salvos na mesma conta, com sincronização pelo backup do app.", add: "Novo registro", node: "", empty: "Nenhum registro nesta área", emptyCopy: "Seus dados aparecem aqui depois que o app salva o backup na nuvem." }
+  mais: { title: "Mais áreas do app", subtitle: "Seus outros dados salvos na mesma conta, com sincronização pelo backup do app.", add: "Novo registro", node: "", empty: "Nenhum registro nesta área", emptyCopy: "Seus dados aparecem aqui depois que o app salva o backup na nuvem." },
+  noticias: { title: "Notícias", subtitle: "Avisos e novidades do Pontua Tasks.", add: "Publicar notícia", node: "", empty: "Nenhuma notícia por enquanto", emptyCopy: "As novidades publicadas aparecerão aqui." }
 };
 const backupLabels = { diary_local:"Diário", humor_local:"Humor", financas_local:"Finanças", dividas_local:"Dívidas", dividas_recorrentes_local:"Dívidas recorrentes", mensagens_local:"Mensagens", livros_local:"Livros", sono_local:"Sono", estudos_local:"Estudos", emprestimos_local:"Empréstimos", lembretes_local:"Lembretes", estoque_local:"Estoque", ferramentas_local:"Ferramentas", calorias_local:"Alimentação", historico_local:"Histórico", config_local:"Configurações" };
 const priorityName = (value) => Number(value) >= 2 ? "Prioridade alta" : Number(value) === 1 ? "Prioridade média" : "Normal";
@@ -54,6 +60,7 @@ function attachLiveData() {
     try { const value = snapshot.val(); state.backup = typeof value === "string" ? JSON.parse(value || "{}") : (value || {}); render(); }
     catch (error) { showError(error); }
   }, showError));
+  state.listeners.push(onValue(ref(database, "news"), (snapshot) => { state.news = snapshot.val() || {}; render(); }, showError));
 }
 
 function updateAccount(user) {
@@ -72,12 +79,13 @@ function render() {
   $("#empty-title").textContent = config.empty;
   $("#empty-copy").textContent = config.emptyCopy;
   $("#navigation").querySelectorAll(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.section === state.section));
-  $("#overview").classList.toggle("hidden", state.section !== "tarefas");
+  $("#overview").classList.toggle("hidden", state.section !== "inicio");
   $("#filters").classList.toggle("hidden", state.section !== "tarefas");
   $("#add-button").classList.toggle("hidden", state.section === "mais");
+  $("#add-button").classList.toggle("hidden", state.section === "noticias" && !isAdmin());
   $("#import-backup-button").classList.toggle("hidden", state.section !== "mais");
   $("#backup-categories").classList.toggle("hidden", state.section !== "mais");
-  const filterHint = state.section === "mais" ? "Backup do app" : state.section === "tarefas" ? "Sincronizado com o app" : "Atualizado em tempo real";
+  const filterHint = state.section === "mais" ? "Backup do app" : state.section === "noticias" ? "Avisos do Pontua Tasks" : "Sincronizado com o app";
   $("#section-helper").innerHTML = `<span class="live-dot"></span> ${filterHint}`;
   $("#filters").querySelectorAll(".filter-pill").forEach((button) => button.classList.toggle("selected", button.dataset.filter === state.filter));
   const taskList = items("tarefas");
@@ -85,14 +93,26 @@ function render() {
   const done = taskList.length - open;
   const progress = taskList.length ? Math.round(done * 100 / taskList.length) : 0;
   $("#open-count").textContent = open; $("#done-count").textContent = done; $("#progress-count").innerHTML = `${progress}<span class="small-unit">%</span>`;
+  const score = Math.max(0, Number(state.backup?.pontua_local?.score || 0));
+  const rank = rankFor(score, Number(state.backup?.pontua_local?.patente_atual_nivel || 1));
+  $("#score-total").textContent = `${Number(state.backup?.pontua_local?.score || 0)} pontos`;
+  $("#rank-name").textContent = LEVEL_NAMES[rank - 1];
+  const badgeNames = ["recruta","soldado","cabo","sargento_3","sargento_2","sargento_1","subtenente","aspirante","tenente_2","tenente_1","capitao","major","tenente_coronel","coronel","general_de_brigada","general_de_divisao","general_de_exercito","marechal"];
+  $("#rank-badge").src = `patentes/${badgeNames[rank - 1]}.png`;
+  const rankBase = LEVEL_THRESHOLDS[rank - 1];
+  const rankTarget = LEVEL_THRESHOLDS[rank] || rankBase;
+  $("#rank-next").textContent = rank >= 18 ? "Patente máxima" : `Próxima: ${LEVEL_NAMES[rank]} · faltam ${Math.max(0, rankTarget - score)} pts`;
+  $("#rank-progress").style.width = rank >= 18 ? "100%" : `${Math.min(100, Math.max(0, (score - rankBase) * 100 / Math.max(1, rankTarget - rankBase)))}%`;
   $("#progress-bar").style.width = `${progress}%`; $("#nav-task-count").textContent = open || "";
   let rows = [];
+  if (state.section === "inicio") rows = renderOverview();
   if (state.section === "tarefas") rows = renderTasks();
   if (state.section === "notas") rows = renderNotes();
   if (state.section === "cuidados") rows = renderCare();
   if (state.section === "agua") rows = renderWater();
   if (state.section === "exercicios") rows = renderExercises();
   if (state.section === "mais") rows = renderBackupSection();
+  if (state.section === "noticias") rows = renderNews();
   if (state.section === "mais") $("#add-button").classList.toggle("hidden", !backupCollection().records.length);
   $("#list").innerHTML = rows.join("");
   $("#empty-state").classList.toggle("hidden", rows.length > 0);
@@ -103,21 +123,151 @@ function row(id, title, subtitle, trailing = "", options = {}) {
   const done = options.checked ? "is-done" : "";
   const check = options.toggle ? `<button class="check-control ${checked}" data-action="${options.toggle}" data-id="${escapeHtml(id)}" aria-label="Marcar como ${options.checked ? "pendente" : "concluído"}">${options.checked ? "✓" : ""}</button>` : "";
   const remove = options.delete ? `<button class="row-action" data-action="delete" data-id="${escapeHtml(id)}" aria-label="Excluir" title="Excluir">×</button>` : "";
-  return `<article class="item-row ${done}" data-id="${escapeHtml(id)}">${check}<div class="item-copy"><div class="item-title">${escapeHtml(title)}</div><div class="item-subtitle">${escapeHtml(subtitle || " ")}</div></div>${trailing}<div class="row-actions">${options.edit ? `<button class="row-action" data-action="edit" data-id="${escapeHtml(id)}" aria-label="Editar" title="Editar">✎</button>` : ""}${remove}</div></article>`;
+  return `<article class="item-row ${done} ${options.urgency || ""}" data-id="${escapeHtml(id)}" data-kind="${escapeHtml(options.kind || "")}">${check}<div class="item-copy"><div class="item-title">${escapeHtml(title)}</div><div class="item-subtitle">${escapeHtml(subtitle || " ")}</div></div>${trailing}<div class="row-actions">${options.edit ? `<button class="row-action" data-action="edit" data-id="${escapeHtml(id)}" aria-label="Editar" title="Editar">✎</button>` : ""}${remove}</div></article>`;
+}
+
+const hasDue = (item) => (item?.hasDeadline === true || Number(item?.dueAt) > 0) && Number(item?.dueAt) > 0;
+const dueSort = (item) => hasDue(item) ? Number(item.dueAt) : Number.POSITIVE_INFINITY;
+function dueAtToday(hour = 23, minute = 59) { const date = new Date(); date.setHours(hour, minute, 0, 0); return date.getTime(); }
+function dueLabel(timestamp) { const date = new Date(timestamp); return `Prazo ${localDate(timestamp)} às ${String(date.getHours()).padStart(2,"0")}:${String(date.getMinutes()).padStart(2,"0")}`; }
+function sectionHeading(title, count) { return `<h2 class="overview-heading">${escapeHtml(title)} <span>${count}</span></h2>`; }
+function decodePref(pref, key, fallback = "") { return decodeBackupValue(state.backup?.[pref]?.[key] ?? fallback); }
+function exerciseGroupsForToday() {
+  const dow = new Date().getDay() + 1;
+  const today = localDayKey();
+  const pref = state.backup?.exercicios_local || {};
+  const defaultDays = { A: [2,5], B: [3,6], C: [4,7] };
+  const defaults = { A: ["Peito","Tríceps"], B: ["Bíceps","Costas"], C: ["Ombro","Inferiores","ABS"] };
+  const groups = [];
+  for (const letter of ["A","B","C"]) {
+    const savedDaysValue = decodePref("exercicios_local", `dias_treino_${letter}`, null);
+    const days = savedDaysValue === null ? defaultDays[letter] : String(savedDaysValue).split(",").map(Number).filter(Boolean);
+    if (!days.includes(dow)) continue;
+    const rawNames = String(decodePref("exercicios_local", `treino_${letter}`, "")).trim();
+    const names = rawNames ? rawNames.split(",").map((name)=>name.trim()).filter(Boolean) : defaults[letter];
+    const dayMap = decodePref("exercicios_local", `dia_${today}`, {});
+    for (const name of names) {
+      const completed = dayMap?.[name] === true || dayMap?.[name] === "feito";
+      groups.push({ id: `abc_${letter}_${safeKey(name)}`, name, type: "abc", completed, dueAt: dueAtToday(), dueText: "Treino de hoje" });
+    }
+  }
+  const marked = items("exercicios_dias");
+  for (const exercise of items("treinos_extras")) {
+    if (!(exercise.days || []).map(Number).includes(dow)) continue;
+    const entry = marked.find((record)=>record.dayKey===today && record.grupo===exercise.name && record.concluido);
+    const hasTime = Number(exercise.deadlineHour) >= 0;
+    groups.push({ id: exercise.id, name: exercise.name, type: "extra", exercise, completed: !!entry, dueAt: hasTime ? dueAtToday(Number(exercise.deadlineHour), Number(exercise.deadlineMinute||0)) : dueAtToday(), dueText: hasTime ? `Prazo até ${String(exercise.deadlineHour).padStart(2,"0")}:${String(exercise.deadlineMinute||0).padStart(2,"0")}` : "Exercício de hoje" });
+  }
+  return groups;
+}
+function renderOverview() {
+  const now = Date.now();
+  const taskRows = items("tarefas").filter((task)=>!task.done).sort((a,b)=>dueSort(a)-dueSort(b)).map((task)=>row(task.id,task.title||"Tarefa",`${task.hasDeadline&&task.dueAt?dueLabel(task.dueAt):"Sem prazo"}${task.description?` · ${task.description}`:""}`,`<span class="tag-chip">Tarefa</span>`,{toggle:"task-toggle",kind:"tarefas",edit:true,urgency:urgencyClass(task)}));
+  const today = localDayKey();
+  const careDay = items("cuidados_dias");
+  const careRows = items("cuidados").filter((care)=>{
+    if (care.diaUnico && care.diaUnico !== today) return false;
+    const rec = careDay.find((entry)=>entry.dayKey===today&&entry.careTaskId===care.id);
+    if (rec?.status) return false;
+    const due = care.hasTime && Number(care.hour)>=0 ? dueAtToday(Number(care.hour),Number(care.minute||0)) : dueAtToday();
+    return !(care.hasTime && care.createdAt && Number(care.createdAt)>due);
+  }).map((care)=>{
+    const deadline = care.hasTime && Number(care.hour)>=0 ? dueAtToday(Number(care.hour),Number(care.minute||0)) : dueAtToday();
+    const label = care.hasTime ? `Hoje às ${String(care.hour).padStart(2,"0")}:${String(care.minute||0).padStart(2,"0")}` : "Hoje · sem horário definido";
+    return { care, deadline, label };
+  }).sort((a,b)=>a.deadline-b.deadline).map(({care,deadline,label})=>row(care.id,care.name||"Cuidado pessoal",label,"<span class=\"tag-chip\">Cuidado</span>",{toggle:"care-toggle",kind:"cuidados",edit:true,urgency:care.hasTime?urgencyClass({hasDeadline:true,dueAt:deadline}):"urgency-none"}));
+  const exerciseRows = exerciseGroupsForToday().filter((exercise)=>!exercise.completed).sort((a,b)=>a.dueAt-b.dueAt).map((exercise)=>row(exercise.id,exercise.name,exercise.dueText,`<span class="tag-chip">${exercise.type==="abc"?"Treino":"Exercício"}</span>`,{toggle:"exercise-toggle",kind:exercise.type==="abc"?"abc":"treinos_extras",edit:exercise.type==="extra",urgency:urgencyClass({hasDeadline:exercise.type==="extra"&&Number(exercise.exercise.deadlineHour)>=0,dueAt:exercise.dueAt})}));
+  const noteRows = items("notas").filter(hasDue).sort((a,b)=>Number(a.dueAt)-Number(b.dueAt)).map((note)=>row(note.id,(note.text||"Nota").split("\n")[0],dueLabel(note.dueAt),"<span class=\"tag-chip\">Nota</span>",{kind:"notas",edit:true,delete:true,urgency:urgencyClass(note)}));
+  const groups = [
+    ["Tarefas em aberto",taskRows],
+    ["Notas com prazo",noteRows],
+    ["Cuidados pessoais de hoje",careRows],
+    ["Exercícios de hoje",exerciseRows]
+  ];
+  const html = groups.map(([title,rows])=>rows.length?`${sectionHeading(title,rows.length)}${rows.join("")}`:"").join("");
+  return html ? [html] : [];
+}
+
+function isAdmin() { return (state.user?.email || "").toLowerCase() === ADMIN_EMAIL; }
+function rankFor(score, savedLevel) {
+  let level = Math.max(1, Math.min(18, savedLevel));
+  while (level < 18 && score >= LEVEL_THRESHOLDS[level]) level++;
+  while (level > 1 && score < LEVEL_FLOORS[level - 1]) level--;
+  return level;
+}
+function urgencyClass(item) {
+  if (item.done) return "";
+  if (!hasDue(item)) return "urgency-none";
+  const diff = Number(item.dueAt || 0) - Date.now();
+  if (diff <= 0) return "urgency-overdue";
+  if (diff <= 3600000) return "urgency-red-strong";
+  if (diff <= 3 * 3600000) return "urgency-red";
+  if (diff <= 8 * 3600000) return "urgency-yellow";
+  if (diff <= 20 * 3600000) return "urgency-green";
+  return "urgency-none";
+}
+function renderNews() {
+  const admin = isAdmin();
+  return Object.entries(state.news).filter(([, item]) => !item?.deleted).sort((a,b)=>Number(b[1]?.createdAt||0)-Number(a[1]?.createdAt||0)).map(([id, news]) => {
+    const safeTitle = escapeHtml(news.title || "Notícia");
+    const body = sanitizeNewsHtml(news.bodyHtml || escapeHtml(news.body || "").replace(/\n/g,"<br>"));
+    const date = news.createdAt ? localDate(news.createdAt) : "";
+    const cover = safeImageSource(news.coverImage);
+    const link = /^https?:\/\//i.test(news.buttonUrl||"") ? `<a class="news-link" href="${escapeHtml(news.buttonUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(news.buttonLabel||"Saiba mais")}</a>` : "";
+    return `<article class="news-card"><div class="news-meta">${escapeHtml(news.category||"Notícia")}${date ? ` · ${date}` : ""}${admin ? `<span><button class="row-action" data-action="edit" data-id="${escapeHtml(id)}" title="Editar notícia">✎</button><button class="row-action" data-action="delete" data-id="${escapeHtml(id)}" title="Excluir notícia">×</button></span>` : ""}</div>${cover?`<img class="news-cover" src="${escapeHtml(cover)}" alt="">`:""}<h2>${safeTitle}</h2>${news.subtitle?`<p class="news-subtitle">${escapeHtml(news.subtitle)}</p>`:""}<div class="news-body">${body}</div>${link}</article>`;
+  });
+}
+
+const NEWS_TAGS = new Set(["P","BR","STRONG","B","EM","I","U","H2","H3","UL","OL","LI","A","IMG","BLOCKQUOTE"]);
+function safeImageSource(value) {
+  const source = String(value || "").trim();
+  return source.length <= 1_300_000 && (/^https?:\/\//i.test(source) || /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(source)) ? source : "";
+}
+function sanitizeNewsHtml(html) {
+  const documentCopy = new DOMParser().parseFromString(`<div>${html}</div>`,"text/html");
+  const root = documentCopy.body.firstElementChild;
+  const cleanNode = (node) => {
+    [...node.childNodes].forEach((child)=>{
+      if (child.nodeType !== Node.ELEMENT_NODE) return;
+      const tag = child.tagName;
+      cleanNode(child);
+      if (!NEWS_TAGS.has(tag)) { child.replaceWith(...child.childNodes); return; }
+      const originalHref = child.getAttribute("href");
+      const originalSrc = child.getAttribute("src");
+      const originalAlt = child.getAttribute("alt") || "";
+      [...child.attributes].forEach((attribute)=>child.removeAttribute(attribute.name));
+      if (tag === "A" && /^(https?:\/\/|mailto:)/i.test(originalHref||"")) { child.setAttribute("href",originalHref); child.setAttribute("target","_blank"); child.setAttribute("rel","noopener noreferrer"); }
+      if (tag === "IMG") { const safe = safeImageSource(originalSrc); if (safe) { child.setAttribute("src",safe); child.setAttribute("alt",originalAlt); } else child.remove(); }
+    });
+  };
+  cleanNode(root);
+  return root.innerHTML;
+}
+async function compressNewsImage(file) {
+  if (!file || !file.type.startsWith("image/")) throw new Error("Escolha um arquivo de imagem.");
+  if (file.size > 12 * 1024 * 1024) throw new Error("A imagem precisa ter menos de 12 MB.");
+  const image = await createImageBitmap(file);
+  const scale = Math.min(1, 1200 / Math.max(image.width,image.height));
+  const canvas = document.createElement("canvas"); canvas.width = Math.max(1,Math.round(image.width*scale)); canvas.height = Math.max(1,Math.round(image.height*scale));
+  canvas.getContext("2d").drawImage(image,0,0,canvas.width,canvas.height); image.close();
+  let data = canvas.toDataURL("image/webp",0.76);
+  if (data.length > 950_000) data = canvas.toDataURL("image/jpeg",0.65);
+  if (data.length > 1_250_000) throw new Error("A imagem ficou muito grande. Escolha uma imagem menor.");
+  return data;
 }
 
 function renderTasks() {
-  const all = items("tarefas").sort((a, b) => Number(a.done) - Number(b.done) || (a.dueAt || 0) - (b.dueAt || 0));
+  const all = items("tarefas").sort((a, b) => Number(a.done) - Number(b.done) || dueSort(a) - dueSort(b));
   return all.filter((task) => state.filter === "todas" || (state.filter === "abertas" ? !task.done : task.done)).map((task) => {
     const subtitle = [task.description, task.hasDeadline && task.dueAt ? `Prazo ${localDate(task.dueAt)}` : "Sem prazo", task.tags ? `# ${task.tags}` : ""].filter(Boolean).join(" · ");
     const level = Number(task.priority || 0);
     const priority = `<span class="priority-chip ${level >= 2 ? "high" : level === 1 ? "medium" : ""}">● ${priorityName(level)}</span>`;
-    return row(task.id, task.title || "Tarefa", subtitle, priority, { toggle: "task-toggle", checked: !!task.done, edit: true, delete: true });
+    return row(task.id, task.title || "Tarefa", subtitle, priority, { toggle: "task-toggle", checked: !!task.done, edit: true, delete: true, urgency: urgencyClass(task) });
   });
 }
 
 function renderNotes() {
-  return items("notas").sort((a,b)=>(b.date||0)-(a.date||0)).map((note) => row(note.id, (note.text || "Nota").split("\n")[0], `${note.tags ? `${note.tags} · ` : ""}${note.date ? localDate(note.date) : "Nota sincronizada"}`, "<span class=\"tag-chip\">Nota</span>", { edit: true, delete: true }));
+  return items("notas").sort((a,b)=>dueSort(a)-dueSort(b)||(b.date||0)-(a.date||0)).map((note) => row(note.id, (note.text || "Nota").split("\n")[0], `${hasDue(note)?dueLabel(note.dueAt):note.date?localDate(note.date):"Nota sincronizada"}${note.tags ? ` · ${note.tags}` : ""}`, "<span class=\"tag-chip\">Nota</span>", { edit: true, delete: true, urgency: hasDue(note) ? urgencyClass(note) : "" }));
 }
 
 function renderCare() {
@@ -256,6 +406,35 @@ function textField(label, name, value = "", placeholder = "") {
 }
 function openDialog(id = null) {
   state.editId = id;
+  if (state.section === "noticias") {
+    const old = id ? state.news[id] : null;
+    $("#dialog-title").textContent = old ? "Editar notícia" : "Publicar notícia";
+    $("#delete-button").classList.add("hidden");
+    const body = old?.bodyHtml || escapeHtml(old?.body || "").replace(/\n/g,"<br>");
+    $("#dialog-fields").innerHTML = field("Título", "newsTitle", old?.title || "", "text", "Ex.: Novidade no aplicativo", "required maxlength=\"100\"") +
+      field("Resumo curto (opcional)", "newsSubtitle", old?.subtitle || "", "text", "Uma frase para chamar atenção", "maxlength=\"180\"") +
+      `<label class="field">Categoria<select name="newsCategory">${["Novidades","Avisos","Atualizações","Eventos","Geral"].map((category)=>`<option ${((old?.category||"Geral")===category)?"selected":""}>${category}</option>`).join("")}</select></label>` +
+      `<label class="field">Imagem de capa (opcional)<span class="news-cover-input"><input name="newsCover" id="news-cover-input" type="text" placeholder="Cole o endereço da imagem ou escolha um arquivo" value="${escapeHtml(old?.coverImage||"")}"/><button type="button" class="button secondary" id="news-cover-choose">Escolher imagem</button><input type="file" id="news-cover-file" accept="image/*" hidden></span><img id="news-cover-preview" class="news-cover-preview ${old?.coverImage?"":"hidden"}" src="${escapeHtml(safeImageSource(old?.coverImage)||"")}" alt="Prévia da capa"></label>` +
+      `<label class="field">Texto da notícia<div class="news-toolbar"><button type="button" data-news-command="bold"><b>B</b></button><button type="button" data-news-command="italic"><i>I</i></button><button type="button" data-news-command="underline"><u>U</u></button><button type="button" data-news-command="formatBlock" data-news-value="h2">Título</button><button type="button" data-news-command="insertUnorderedList">• Lista</button><button type="button" data-news-command="createLink">Link</button><button type="button" id="news-insert-image">Imagem no texto</button><input type="file" id="news-body-file" accept="image/*" hidden></div><div id="news-editor" class="news-editor" contenteditable="true" data-placeholder="Escreva a notícia. Selecione um trecho e use os botões para formatar.">${sanitizeNewsHtml(body)}</div></label>` +
+      field("Endereço do botão (opcional)", "newsButtonUrl", old?.buttonUrl || "", "url", "https://…") +
+      field("Texto do botão", "newsButtonLabel", old?.buttonLabel || "Saiba mais", "text", "Saiba mais", "maxlength=\"40\"");
+    $("#item-dialog").showModal();
+    const coverInput = $("#news-cover-input");
+    const coverPreview = $("#news-cover-preview");
+    const previewCover = () => { const src=safeImageSource(coverInput.value); coverPreview.src=src; coverPreview.classList.toggle("hidden",!src); };
+    coverInput.addEventListener("input",previewCover);
+    $("#news-cover-choose").addEventListener("click",()=>$("#news-cover-file").click());
+    $("#news-cover-file").addEventListener("change",async(event)=>{try{coverInput.value=await compressNewsImage(event.target.files[0]);previewCover();}catch(error){message(error.message,true);}});
+    $("#news-insert-image").addEventListener("click",()=>$("#news-body-file").click());
+    $("#news-body-file").addEventListener("change",async(event)=>{try{const src=await compressNewsImage(event.target.files[0]);$("#news-editor").focus();document.execCommand("insertHTML",false,`<p><img src="${src}" alt="Imagem da notícia"></p>`);}catch(error){message(error.message,true);}});
+    $("#dialog-fields").querySelectorAll("[data-news-command]").forEach((button)=>button.addEventListener("mousedown",(event)=>event.preventDefault()));
+    $("#dialog-fields").querySelectorAll("[data-news-command]").forEach((button)=>button.addEventListener("click",()=>{
+      $("#news-editor").focus();
+      if(button.dataset.newsCommand==="createLink"){const url=prompt("Cole o endereço do link (https://…)");if(url&&/^https?:\/\//i.test(url))document.execCommand("createLink",false,url);else if(url)message("Use um endereço que comece com http:// ou https://.");}
+      else document.execCommand(button.dataset.newsCommand,false,button.dataset.newsValue||null);
+    }));
+    return;
+  }
   const node = sections[state.section].node;
   const existing = id ? state.data[node][id] : null;
   const title = existing ? `Editar ${state.section === "tarefas" ? "tarefa" : state.section === "notas" ? "nota" : state.section === "cuidados" ? "cuidado" : "exercício"}` : sections[state.section].add;
@@ -272,7 +451,8 @@ function openDialog(id = null) {
       field("Tags (opcional)", "tags", existing?.tags || "", "text", "estudo, trabalho") +
       `<label class="checkbox-field"><input name="mandatory" type="checkbox" ${existing?.mandatory ? "checked" : ""} /> Tarefa importante</label>`;
   } else if (state.section === "notas") {
-    fields = textField("Sua nota", "text", existing?.text || "", "Escreva sua ideia aqui…") + field("Tags (opcional)", "tags", existing?.tags || "", "text", "ideias, estudo");
+    const noteDue = existing?.dueAt ? new Date(existing.dueAt) : null;
+    fields = textField("Sua nota", "text", existing?.text || "", "Escreva sua ideia aqui…") + field("Prazo (opcional)", "dueAt", noteDue ? new Date(noteDue.getTime()-noteDue.getTimezoneOffset()*60000).toISOString().slice(0,16) : "", "datetime-local") + field("Tags (opcional)", "tags", existing?.tags || "", "text", "ideias, estudo");
   } else if (state.section === "cuidados") {
     fields = field("Nome do cuidado", "name", existing?.name || "", "text", "Ex.: escovar os dentes", "required maxlength=\"80\"") +
       `<label class="checkbox-field"><input name="hasTime" type="checkbox" ${existing?.hasTime ? "checked" : ""} /> Definir um horário</label>` +
@@ -292,6 +472,18 @@ function openDialog(id = null) {
 }
 
 async function saveItem(form) {
+  if (state.section === "noticias") {
+    if (!isAdmin()) return message("Somente a conta administradora pode publicar notícias.", true);
+    const values = Object.fromEntries(new FormData(form).entries());
+    const bodyHtml = sanitizeNewsHtml($("#news-editor").innerHTML);
+    if (!values.newsTitle.trim() || !bodyHtml.trim()) return message("Preencha o título e o texto da notícia.");
+    if (values.newsCover && !safeImageSource(values.newsCover)) return message("Confira o endereço da imagem de capa.");
+    if (values.newsButtonUrl && !/^https?:\/\//i.test(values.newsButtonUrl)) return message("O endereço do botão precisa começar com http:// ou https://.");
+    const id = state.editId || crypto.randomUUID();
+    const old = state.news[id] || {};
+    await set(ref(database, `news/${id}`), { title: values.newsTitle.trim(), subtitle: values.newsSubtitle.trim(), category: values.newsCategory || "Geral", coverImage: safeImageSource(values.newsCover), bodyHtml, buttonUrl: values.newsButtonUrl.trim(), buttonLabel: values.newsButtonLabel.trim() || "Saiba mais", createdAt: Number(old.createdAt || Date.now()), updatedAt: Date.now(), author: ADMIN_EMAIL, deleted: false });
+    $("#item-dialog").close(); message(state.editId ? "Notícia atualizada." : "Notícia publicada para os usuários."); return;
+  }
   const node = sections[state.section].node;
   const old = state.editId ? state.data[node][state.editId] : null;
   const id = state.editId || crypto.randomUUID();
@@ -301,7 +493,7 @@ async function saveItem(form) {
     data = { ...old, title: values.title.trim(), description: values.description.trim(), dueAt: values.dueAt ? new Date(values.dueAt).getTime() : 0, hasDeadline: !!values.dueAt, repeat: values.repeat || "NONE", priority: Number(values.priority || 0), mandatory: form.elements.mandatory.checked, done: !!old?.done, penalized: !!old?.penalized, completedAt: Number(old?.completedAt || 0), repeatDays: values.repeat === "CUSTOM" ? (old?.repeatDays || []) : values.repeat === "WEEKLY" ? [...form.querySelectorAll('[name="repeatDay"]:checked')].map((input)=>Number(input.value)) : [], tags: values.tags.trim(), linkedRecurringDebtId: old?.linkedRecurringDebtId || "", lastPenaltyDay: old?.lastPenaltyDay || "", createdAt: Number(old?.createdAt || Date.now()), linkedStudySubjectId: old?.linkedStudySubjectId || "", ofertaStatus: old?.ofertaStatus || "", ofertaPontos: Number(old?.ofertaPontos || 0), ofertaPrazoEm: Number(old?.ofertaPrazoEm || 0), ultimaOfertaEm: Number(old?.ultimaOfertaEm || 0) };
   } else if (state.section === "notas") {
     if (!values.text.trim()) return message("Escreva alguma coisa na nota.");
-    data = { ...old, text: values.text.trim(), tags: values.tags.trim(), date: Number(old?.date || Date.now()) };
+    data = { ...old, text: values.text.trim(), tags: values.tags.trim(), date: Number(old?.date || Date.now()), dueAt: values.dueAt ? new Date(values.dueAt).getTime() : 0, hasDeadline: !!values.dueAt };
   } else if (state.section === "cuidados") {
     const [hour = "-1", minute = "0"] = values.time ? values.time.split(":") : [];
     data = { ...old, name: values.name.trim(), createdAt: Number(old?.createdAt || Date.now()), hasTime: form.elements.hasTime.checked && !!values.time, hour: Number(hour), minute: Number(minute), diaUnico: values.diaUnico || "", hasReleaseTime: !!old?.hasReleaseTime, releaseHour: Number(old?.releaseHour ?? -1), releaseMinute: Number(old?.releaseMinute || 0) };
@@ -320,6 +512,12 @@ async function writeItem(node, id, data) {
 }
 
 async function deleteItem(id) {
+  if (state.section === "noticias") {
+    if (!isAdmin()) return message("Somente a conta administradora pode excluir notícias.", true);
+    if (!confirm("Excluir esta notícia para todos os usuários?")) return;
+    await update(ref(database, `news/${id}`), { deleted: true, updatedAt: Date.now() });
+    return message("Notícia excluída.");
+  }
   const node = sections[state.section].node;
   if (!confirm("Excluir este item? A alteração será sincronizada com o app.")) return;
   await update(ref(database, `users/${state.user.uid}/itens/${node}/${id}`), { deletado: true, updatedAt: Date.now() });
@@ -352,7 +550,11 @@ onAuthStateChanged(auth, (user) => {
 
 $("#navigation").addEventListener("click", (event) => { const button = event.target.closest("[data-section]"); if (button) { state.section = button.dataset.section; state.filter = "todas"; render(); } });
 $("#filters").addEventListener("click", (event) => { const button = event.target.closest("[data-filter]"); if (button) { state.filter = button.dataset.filter; render(); } });
-$("#add-button").addEventListener("click", () => state.section === "mais" ? openBackupDialog() : openDialog());
+$("#add-button").addEventListener("click", () => {
+  if (state.section === "mais") return openBackupDialog();
+  if (state.section === "inicio") { state.section = "tarefas"; render(); }
+  openDialog();
+});
 $("#dialog-close").addEventListener("click", () => $("#item-dialog").close());
 $("#cancel-button").addEventListener("click", () => $("#item-dialog").close());
 $("#delete-button").addEventListener("click", () => {
@@ -395,6 +597,37 @@ $("#list").addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action]"); if (!button) return;
   const { action, id } = button.dataset;
   try {
+    if (state.section === "inicio") {
+      const kind = button.closest("[data-kind]")?.dataset.kind;
+      if (action === "edit" || action === "delete") {
+        const target = kind === "treinos_extras" ? "exercicios" : kind;
+        if (!target || target === "abc") return;
+        state.section = target; render();
+        if (action === "edit") return openDialog(id);
+        return deleteItem(id);
+      }
+      if (action === "task-toggle") {
+        const task = state.data.tarefas[id]; if (!task) return;
+        const done = !task.done;
+        await writeItem("tarefas", id, { ...task, done, completedAt: done ? Date.now() : 0 }); return;
+      }
+      if (action === "care-toggle") {
+        const record = items("cuidados_dias").find((entry)=>entry.dayKey===localDayKey()&&entry.careTaskId===id);
+        await updateCareDayStatus(id, record?.status==="feito"?"":"feito"); return;
+      }
+      if (action === "exercise-toggle") {
+        const exercise = kind === "abc" ? { name: button.closest("[data-kind]").querySelector(".item-title").textContent } : state.data.treinos_extras[id];
+        if (!exercise) return;
+        const record = exerciseGroupsForToday().find((entry)=>entry.name===exercise.name);
+        await updateExerciseDayStatus(exercise, !record?.completed); return;
+      }
+      return;
+    }
+    if (state.section === "noticias") {
+      if (!isAdmin()) return;
+      if (action === "edit") return openDialog(id);
+      if (action === "delete") return deleteItem(id);
+    }
     if (state.section === "mais") {
       if (action === "edit") return openBackupDialog(id);
       if (action === "delete") return deleteBackupRecord(id);
@@ -418,3 +651,4 @@ $("#backup-categories").addEventListener("click", (event) => {
 });
 
 $("#today-label").textContent = new Intl.DateTimeFormat("pt-BR", { weekday: "short", day: "numeric", month: "short" }).format(new Date());
+setInterval(() => { if (state.user) render(); }, 60_000);
