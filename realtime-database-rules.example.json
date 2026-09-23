@@ -5,12 +5,6 @@
         ".read": "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid"
       }
-    },
-    "news": {
-      ".read": "auth != null",
-      "$newsId": {
-        ".write": "auth != null && auth.token.email === 'sotrabalho683@gmail.com'"
-      }
     }
   }
 }

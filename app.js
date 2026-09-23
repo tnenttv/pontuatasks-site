@@ -7,11 +7,7 @@ const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const database = getDatabase(firebaseApp);
 const $ = (selector) => document.querySelector(selector);
-const ADMIN_EMAIL = "sotrabalho683@gmail.com";
-const LEVEL_THRESHOLDS = [0,50,100,180,280,400,550,750,1000,1300,1650,2050,2500,3000,3550,4150,4800,5500];
-const LEVEL_FLOORS = [0,35,70,140,220,330,470,650,880,1150,1450,1800,2200,2650,3150,3700,4300,4800];
-const LEVEL_NAMES = ["Recruta","Soldado","Cabo","3º Sargento","2º Sargento","1º Sargento","Subtenente","Aspirante","2º Tenente","1º Tenente","Capitão","Major","Tenente-Coronel","Coronel","General de Brigada","General de Divisão","General de Exército","General"];
-const state = { user: null, section: "tarefas", filter: "todas", data: { tarefas: {}, notas: {}, cuidados: {}, agua: {}, treinos_extras: {}, exercicios_dias: {}, cuidados_dias: {} }, backup: {}, news: {}, backupCategory: "diary_local", listeners: [], editId: null, editIndex: null, toastTimer: null };
+const state = { user: null, section: "tarefas", filter: "todas", data: { tarefas: {}, notas: {}, cuidados: {}, agua: {}, treinos_extras: {}, exercicios_dias: {}, cuidados_dias: {} }, backup: {}, backupCategory: "diary_local", listeners: [], editId: null, editIndex: null, toastTimer: null };
 const sections = {
   tarefas: { title: "Suas tarefas", subtitle: "Organize o que importa e comemore cada avanço.", add: "Nova tarefa", node: "tarefas", empty: "Tudo começa com um primeiro passo", emptyCopy: "Adicione uma tarefa e ela aparecerá aqui e no aplicativo." },
   cuidados: { title: "Cuidados pessoais", subtitle: "Pequenos hábitos que ajudam você a se sentir bem.", add: "Novo cuidado", node: "cuidados", empty: "Um cuidado de cada vez", emptyCopy: "Adicione um cuidado pessoal para acompanhar sua rotina." },
@@ -19,7 +15,6 @@ const sections = {
   notas: { title: "Suas notas", subtitle: "Ideias e lembretes rápidos, sempre à mão.", add: "Nova nota", node: "notas", empty: "Guarde uma ideia por aqui", emptyCopy: "Suas notas ficam disponíveis no site e no app." },
   exercicios: { title: "Seus exercícios", subtitle: "Uma rotina simples, registrada junto com o app.", add: "Novo exercício", node: "treinos_extras", empty: "Monte sua rotina", emptyCopy: "Adicione um exercício para organizar seus treinos." },
   mais: { title: "Mais áreas do app", subtitle: "Seus outros dados salvos na mesma conta, com sincronização pelo backup do app.", add: "Novo registro", node: "", empty: "Nenhum registro nesta área", emptyCopy: "Seus dados aparecem aqui depois que o app salva o backup na nuvem." }
-  ,noticias: { title: "Notícias", subtitle: "Avisos e novidades do Pontua Tasks.", add: "Publicar notícia", node: "", empty: "Nenhuma notícia por enquanto", emptyCopy: "As novidades publicadas aparecerão aqui." }
 };
 const backupLabels = { diary_local:"Diário", humor_local:"Humor", financas_local:"Finanças", dividas_local:"Dívidas", dividas_recorrentes_local:"Dívidas recorrentes", mensagens_local:"Mensagens", livros_local:"Livros", sono_local:"Sono", estudos_local:"Estudos", emprestimos_local:"Empréstimos", lembretes_local:"Lembretes", estoque_local:"Estoque", ferramentas_local:"Ferramentas", calorias_local:"Alimentação", historico_local:"Histórico", config_local:"Configurações" };
 const priorityName = (value) => Number(value) >= 2 ? "Prioridade alta" : Number(value) === 1 ? "Prioridade média" : "Normal";
@@ -59,7 +54,6 @@ function attachLiveData() {
     try { const value = snapshot.val(); state.backup = typeof value === "string" ? JSON.parse(value || "{}") : (value || {}); render(); }
     catch (error) { showError(error); }
   }, showError));
-  state.listeners.push(onValue(ref(database, "news"), (snapshot) => { state.news = snapshot.val() || {}; render(); }, showError));
 }
 
 function updateAccount(user) {
@@ -81,7 +75,6 @@ function render() {
   $("#overview").classList.toggle("hidden", state.section !== "tarefas");
   $("#filters").classList.toggle("hidden", state.section !== "tarefas");
   $("#add-button").classList.toggle("hidden", state.section === "mais");
-  $("#add-button").classList.toggle("hidden", state.section === "noticias" && !isAdmin());
   $("#import-backup-button").classList.toggle("hidden", state.section !== "mais");
   $("#backup-categories").classList.toggle("hidden", state.section !== "mais");
   const filterHint = state.section === "mais" ? "Backup do app" : state.section === "tarefas" ? "Sincronizado com o app" : "Atualizado em tempo real";
@@ -92,16 +85,6 @@ function render() {
   const done = taskList.length - open;
   const progress = taskList.length ? Math.round(done * 100 / taskList.length) : 0;
   $("#open-count").textContent = open; $("#done-count").textContent = done; $("#progress-count").innerHTML = `${progress}<span class="small-unit">%</span>`;
-  const score = Math.max(0, Number(state.backup?.pontua_local?.score || 0));
-  const rank = rankFor(score, Number(state.backup?.pontua_local?.patente_atual_nivel || 1));
-  $("#score-total").textContent = `${Number(state.backup?.pontua_local?.score || 0)} pontos`;
-  $("#rank-name").textContent = LEVEL_NAMES[rank - 1];
-  const badgeNames = ["recruta","soldado","cabo","sargento_3","sargento_2","sargento_1","subtenente","aspirante","tenente_2","tenente_1","capitao","major","tenente_coronel","coronel","general_de_brigada","general_de_divisao","general_de_exercito","marechal"];
-  $("#rank-badge").src = `patentes/${badgeNames[rank - 1]}.png`;
-  const rankBase = LEVEL_THRESHOLDS[rank - 1];
-  const rankTarget = LEVEL_THRESHOLDS[rank] || rankBase;
-  $("#rank-next").textContent = rank >= 18 ? "Patente máxima" : `Próxima: ${LEVEL_NAMES[rank]} · faltam ${Math.max(0, rankTarget - score)} pts`;
-  $("#rank-progress").style.width = rank >= 18 ? "100%" : `${Math.min(100, Math.max(0, (score - rankBase) * 100 / Math.max(1, rankTarget - rankBase)))}%`;
   $("#progress-bar").style.width = `${progress}%`; $("#nav-task-count").textContent = open || "";
   let rows = [];
   if (state.section === "tarefas") rows = renderTasks();
@@ -110,7 +93,6 @@ function render() {
   if (state.section === "agua") rows = renderWater();
   if (state.section === "exercicios") rows = renderExercises();
   if (state.section === "mais") rows = renderBackupSection();
-  if (state.section === "noticias") rows = renderNews();
   if (state.section === "mais") $("#add-button").classList.toggle("hidden", !backupCollection().records.length);
   $("#list").innerHTML = rows.join("");
   $("#empty-state").classList.toggle("hidden", rows.length > 0);
@@ -121,35 +103,7 @@ function row(id, title, subtitle, trailing = "", options = {}) {
   const done = options.checked ? "is-done" : "";
   const check = options.toggle ? `<button class="check-control ${checked}" data-action="${options.toggle}" data-id="${escapeHtml(id)}" aria-label="Marcar como ${options.checked ? "pendente" : "concluído"}">${options.checked ? "✓" : ""}</button>` : "";
   const remove = options.delete ? `<button class="row-action" data-action="delete" data-id="${escapeHtml(id)}" aria-label="Excluir" title="Excluir">×</button>` : "";
-  return `<article class="item-row ${done} ${options.urgency || ""}" data-id="${escapeHtml(id)}">${check}<div class="item-copy"><div class="item-title">${escapeHtml(title)}</div><div class="item-subtitle">${escapeHtml(subtitle || " ")}</div></div>${trailing}<div class="row-actions">${options.edit ? `<button class="row-action" data-action="edit" data-id="${escapeHtml(id)}" aria-label="Editar" title="Editar">✎</button>` : ""}${remove}</div></article>`;
-}
-
-function isAdmin() { return (state.user?.email || "").toLowerCase() === ADMIN_EMAIL; }
-function rankFor(score, savedLevel) {
-  let level = Math.max(1, Math.min(18, savedLevel));
-  while (level < 18 && score >= LEVEL_THRESHOLDS[level]) level++;
-  while (level > 1 && score < LEVEL_FLOORS[level - 1]) level--;
-  return level;
-}
-function urgencyClass(item) {
-  if (item.done) return "";
-  if (!item.hasDeadline) return "urgency-none";
-  const diff = Number(item.dueAt || 0) - Date.now();
-  if (diff <= 0) return "urgency-overdue";
-  if (diff <= 3600000) return "urgency-red-strong";
-  if (diff <= 3 * 3600000) return "urgency-red";
-  if (diff <= 8 * 3600000) return "urgency-yellow";
-  if (diff <= 20 * 3600000) return "urgency-green";
-  return "urgency-none";
-}
-function renderNews() {
-  const admin = isAdmin();
-  return Object.entries(state.news).filter(([, item]) => !item?.deleted).sort((a,b)=>Number(b[1]?.createdAt||0)-Number(a[1]?.createdAt||0)).map(([id, news]) => {
-    const safeTitle = escapeHtml(news.title || "Notícia");
-    const body = escapeHtml(news.body || "");
-    const date = news.createdAt ? localDate(news.createdAt) : "";
-    return `<article class="news-card"><div class="news-meta">${date ? `Publicado em ${date}` : "Notícia"}${admin ? `<span><button class="row-action" data-action="edit" data-id="${escapeHtml(id)}" title="Editar notícia">✎</button><button class="row-action" data-action="delete" data-id="${escapeHtml(id)}" title="Excluir notícia">×</button></span>` : ""}</div><h2>${safeTitle}</h2><p>${body.replace(/\n/g,"<br>")}</p></article>`;
-  });
+  return `<article class="item-row ${done}" data-id="${escapeHtml(id)}">${check}<div class="item-copy"><div class="item-title">${escapeHtml(title)}</div><div class="item-subtitle">${escapeHtml(subtitle || " ")}</div></div>${trailing}<div class="row-actions">${options.edit ? `<button class="row-action" data-action="edit" data-id="${escapeHtml(id)}" aria-label="Editar" title="Editar">✎</button>` : ""}${remove}</div></article>`;
 }
 
 function renderTasks() {
@@ -158,12 +112,12 @@ function renderTasks() {
     const subtitle = [task.description, task.hasDeadline && task.dueAt ? `Prazo ${localDate(task.dueAt)}` : "Sem prazo", task.tags ? `# ${task.tags}` : ""].filter(Boolean).join(" · ");
     const level = Number(task.priority || 0);
     const priority = `<span class="priority-chip ${level >= 2 ? "high" : level === 1 ? "medium" : ""}">● ${priorityName(level)}</span>`;
-    return row(task.id, task.title || "Tarefa", subtitle, priority, { toggle: "task-toggle", checked: !!task.done, edit: true, delete: true, urgency: urgencyClass(task) });
+    return row(task.id, task.title || "Tarefa", subtitle, priority, { toggle: "task-toggle", checked: !!task.done, edit: true, delete: true });
   });
 }
 
 function renderNotes() {
-  return items("notas").sort((a,b)=>(b.date||0)-(a.date||0)).map((note) => row(note.id, (note.text || "Nota").split("\n")[0], `${note.tags ? `${note.tags} · ` : ""}${note.date ? localDate(note.date) : "Nota sincronizada"}`, "<span class=\"tag-chip\">Nota</span>", { edit: true, delete: true, urgency: note.hasDeadline ? urgencyClass(note) : "" }));
+  return items("notas").sort((a,b)=>(b.date||0)-(a.date||0)).map((note) => row(note.id, (note.text || "Nota").split("\n")[0], `${note.tags ? `${note.tags} · ` : ""}${note.date ? localDate(note.date) : "Nota sincronizada"}`, "<span class=\"tag-chip\">Nota</span>", { edit: true, delete: true }));
 }
 
 function renderCare() {
@@ -302,14 +256,6 @@ function textField(label, name, value = "", placeholder = "") {
 }
 function openDialog(id = null) {
   state.editId = id;
-  if (state.section === "noticias") {
-    const old = id ? state.news[id] : null;
-    $("#dialog-title").textContent = old ? "Editar notícia" : "Publicar notícia";
-    $("#delete-button").classList.add("hidden");
-    $("#dialog-fields").innerHTML = field("Título", "newsTitle", old?.title || "", "text", "Ex.: Novidade no aplicativo", "required maxlength=\"100\"") + textField("Notícia", "newsBody", old?.body || "", "Escreva o aviso que deseja compartilhar…");
-    $("#item-dialog").showModal();
-    return;
-  }
   const node = sections[state.section].node;
   const existing = id ? state.data[node][id] : null;
   const title = existing ? `Editar ${state.section === "tarefas" ? "tarefa" : state.section === "notas" ? "nota" : state.section === "cuidados" ? "cuidado" : "exercício"}` : sections[state.section].add;
@@ -346,15 +292,6 @@ function openDialog(id = null) {
 }
 
 async function saveItem(form) {
-  if (state.section === "noticias") {
-    if (!isAdmin()) return message("Somente a conta administradora pode publicar notícias.", true);
-    const values = Object.fromEntries(new FormData(form).entries());
-    if (!values.newsTitle.trim() || !values.newsBody.trim()) return message("Preencha o título e o texto da notícia.");
-    const id = state.editId || crypto.randomUUID();
-    const old = state.news[id] || {};
-    await set(ref(database, `news/${id}`), { title: values.newsTitle.trim(), body: values.newsBody.trim(), createdAt: Number(old.createdAt || Date.now()), updatedAt: Date.now(), author: ADMIN_EMAIL, deleted: false });
-    $("#item-dialog").close(); message(state.editId ? "Notícia atualizada." : "Notícia publicada para os usuários."); return;
-  }
   const node = sections[state.section].node;
   const old = state.editId ? state.data[node][state.editId] : null;
   const id = state.editId || crypto.randomUUID();
@@ -383,12 +320,6 @@ async function writeItem(node, id, data) {
 }
 
 async function deleteItem(id) {
-  if (state.section === "noticias") {
-    if (!isAdmin()) return message("Somente a conta administradora pode excluir notícias.", true);
-    if (!confirm("Excluir esta notícia para todos os usuários?")) return;
-    await update(ref(database, `news/${id}`), { deleted: true, updatedAt: Date.now() });
-    return message("Notícia excluída.");
-  }
   const node = sections[state.section].node;
   if (!confirm("Excluir este item? A alteração será sincronizada com o app.")) return;
   await update(ref(database, `users/${state.user.uid}/itens/${node}/${id}`), { deletado: true, updatedAt: Date.now() });
@@ -464,11 +395,6 @@ $("#list").addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action]"); if (!button) return;
   const { action, id } = button.dataset;
   try {
-    if (state.section === "noticias") {
-      if (!isAdmin()) return;
-      if (action === "edit") return openDialog(id);
-      if (action === "delete") return deleteItem(id);
-    }
     if (state.section === "mais") {
       if (action === "edit") return openBackupDialog(id);
       if (action === "delete") return deleteBackupRecord(id);
@@ -492,4 +418,3 @@ $("#backup-categories").addEventListener("click", (event) => {
 });
 
 $("#today-label").textContent = new Intl.DateTimeFormat("pt-BR", { weekday: "short", day: "numeric", month: "short" }).format(new Date());
-setInterval(() => { if (state.user) render(); }, 60_000);

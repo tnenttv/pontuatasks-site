@@ -16,12 +16,13 @@ O site não usa uma base paralela. Ele grava em `users/SEU_UID/itens/`, no mesmo
 
 ## Abrir no computador
 
-1. Abra a pasta do site no Explorador de Arquivos.
-2. Dê dois cliques em `INICIAR-SITE.bat`. Ele abre o site no navegador e mantém uma janela do servidor aberta.
-3. Entre com a mesma conta Google usada no app.
-4. Para encerrar o site local, feche a janela chamada **Pontua Tasks - servidor local**.
+1. Abra a pasta `PontuaTasksWeb` no Explorador de Arquivos.
+2. Clique na barra de endereço, digite `powershell` e pressione Enter.
+3. Digite `py -m http.server 8000` e pressione Enter.
+4. Abra [http://localhost:8000](http://localhost:8000) no Chrome ou Edge e entre com a mesma conta Google usada no app.
+5. Para encerrar o site local, volte à janela do PowerShell e pressione `Ctrl+C`.
 
-O primeiro uso também precisa das configurações do Firebase descritas acima. O site precisa ser aberto por um servidor local, não pelo duplo clique em `index.html`, porque o login seguro do Google não funciona em páginas `file://`.
+O site precisa ser aberto por um servidor local, não pelo duplo clique em `index.html`, porque o login seguro do Google não funciona em páginas `file://`.
 
 ## O que funciona nesta primeira versão
 
@@ -34,13 +35,6 @@ O primeiro uso também precisa das configurações do Firebase descritas acima. 
 - Layout responsivo para computador e celular, com atualizações ao vivo do Realtime Database.
 
 As tarefas, notas, água, cuidados pessoais e exercícios extras são atualizados ao vivo nos dois lados. As demais áreas podem ser consultadas e editadas pelo site a partir do backup; depois de uma edição web, puxe a tela para baixo no app Android para aplicar a mudança e sincronizar o backup combinado. Esse fluxo exige a versão Android atualizada com o suporte a alterações do site. Dados antigos que estejam só no armazenamento local do telefone não são enviados automaticamente; use **Importar backup** para trazer tarefas, notas, água, cuidados e exercícios que já tenham sido salvos na nuvem. Os dois dispositivos precisam usar a mesma conta Google.
-
-## Notícias, pontuação e patentes
-
-- A aba **Notícias** mostra os avisos para qualquer usuário que tenha entrado no site. O botão para publicar e os controles para editar/excluir aparecem somente quando a conta conectada é `sotrabalho683@gmail.com`.
-- Para aplicar essa restrição também no banco, atualize as regras do Realtime Database usando a seção `news` de `realtime-database-rules.example.json`. Preserve as regras existentes do app e acrescente essa seção dentro de `rules`; não abra o banco para acesso público. A leitura é permitida a usuários autenticados e a escrita exige o e-mail administrador.
-- A pontuação e a patente são lidas do backup enviado pelo app. A patente usa os mesmos limites, nomes, faixa de segurança para rebaixamento e insígnias do aplicativo. Deixe o app conectado e abra-o com internet para sincronizar o backup.
-- As tarefas com prazo seguem as mesmas cores de urgência do aplicativo: cinza sem prazo/mais distante, verde quando faltam até 20 horas, amarelo até 8 horas, vermelho até 3 horas, vermelho forte até 1 hora e preto depois do vencimento.
 
 ## Segurança
 
