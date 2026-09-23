@@ -126,7 +126,8 @@ function row(id, title, subtitle, trailing = "", options = {}) {
   return `<article class="item-row ${done} ${options.urgency || ""}" data-id="${escapeHtml(id)}" data-kind="${escapeHtml(options.kind || "")}">${check}<div class="item-copy"><div class="item-title">${escapeHtml(title)}</div><div class="item-subtitle">${escapeHtml(subtitle || " ")}</div></div>${trailing}<div class="row-actions">${options.edit ? `<button class="row-action" data-action="edit" data-id="${escapeHtml(id)}" aria-label="Editar" title="Editar">✎</button>` : ""}${remove}</div></article>`;
 }
 
-const dueSort = (item) => item.hasDeadline && Number(item.dueAt) > 0 ? Number(item.dueAt) : Number.POSITIVE_INFINITY;
+const hasDue = (item) => (item?.hasDeadline === true || Number(item?.dueAt) > 0) && Number(item?.dueAt) > 0;
+const dueSort = (item) => hasDue(item) ? Number(item.dueAt) : Number.POSITIVE_INFINITY;
 function dueAtToday(hour = 23, minute = 59) { const date = new Date(); date.setHours(hour, minute, 0, 0); return date.getTime(); }
 function dueLabel(timestamp) { const date = new Date(timestamp); return `Prazo ${localDate(timestamp)} às ${String(date.getHours()).padStart(2,"0")}:${String(date.getMinutes()).padStart(2,"0")}`; }
 function sectionHeading(title, count) { return `<h2 class="overview-heading">${escapeHtml(title)} <span>${count}</span></h2>`; }
@@ -168,14 +169,15 @@ function renderOverview() {
     if (care.diaUnico && care.diaUnico !== today) return false;
     const rec = careDay.find((entry)=>entry.dayKey===today&&entry.careTaskId===care.id);
     if (rec?.status) return false;
-    return !(care.createdAt && Number(care.createdAt)>dueAtToday());
+    const due = care.hasTime && Number(care.hour)>=0 ? dueAtToday(Number(care.hour),Number(care.minute||0)) : dueAtToday();
+    return !(care.hasTime && care.createdAt && Number(care.createdAt)>due);
   }).map((care)=>{
     const deadline = care.hasTime && Number(care.hour)>=0 ? dueAtToday(Number(care.hour),Number(care.minute||0)) : dueAtToday();
     const label = care.hasTime ? `Hoje às ${String(care.hour).padStart(2,"0")}:${String(care.minute||0).padStart(2,"0")}` : "Hoje · sem horário definido";
     return { care, deadline, label };
   }).sort((a,b)=>a.deadline-b.deadline).map(({care,deadline,label})=>row(care.id,care.name||"Cuidado pessoal",label,"<span class=\"tag-chip\">Cuidado</span>",{toggle:"care-toggle",kind:"cuidados",edit:true,urgency:care.hasTime?urgencyClass({hasDeadline:true,dueAt:deadline}):"urgency-none"}));
   const exerciseRows = exerciseGroupsForToday().filter((exercise)=>!exercise.completed).sort((a,b)=>a.dueAt-b.dueAt).map((exercise)=>row(exercise.id,exercise.name,exercise.dueText,`<span class="tag-chip">${exercise.type==="abc"?"Treino":"Exercício"}</span>`,{toggle:"exercise-toggle",kind:exercise.type==="abc"?"abc":"treinos_extras",edit:exercise.type==="extra",urgency:urgencyClass({hasDeadline:exercise.type==="extra"&&Number(exercise.exercise.deadlineHour)>=0,dueAt:exercise.dueAt})}));
-  const noteRows = items("notas").filter((note)=>note.hasDeadline&&Number(note.dueAt)>0).sort((a,b)=>Number(a.dueAt)-Number(b.dueAt)).map((note)=>row(note.id,(note.text||"Nota").split("\n")[0],dueLabel(note.dueAt),"<span class=\"tag-chip\">Nota</span>",{kind:"notas",edit:true,delete:true,urgency:urgencyClass(note)}));
+  const noteRows = items("notas").filter(hasDue).sort((a,b)=>Number(a.dueAt)-Number(b.dueAt)).map((note)=>row(note.id,(note.text||"Nota").split("\n")[0],dueLabel(note.dueAt),"<span class=\"tag-chip\">Nota</span>",{kind:"notas",edit:true,delete:true,urgency:urgencyClass(note)}));
   const groups = [
     ["Tarefas em aberto",taskRows],
     ["Notas com prazo",noteRows],
@@ -195,7 +197,7 @@ function rankFor(score, savedLevel) {
 }
 function urgencyClass(item) {
   if (item.done) return "";
-  if (!item.hasDeadline) return "urgency-none";
+  if (!hasDue(item)) return "urgency-none";
   const diff = Number(item.dueAt || 0) - Date.now();
   if (diff <= 0) return "urgency-overdue";
   if (diff <= 3600000) return "urgency-red-strong";
@@ -219,7 +221,7 @@ function renderNews() {
 const NEWS_TAGS = new Set(["P","BR","STRONG","B","EM","I","U","H2","H3","UL","OL","LI","A","IMG","BLOCKQUOTE"]);
 function safeImageSource(value) {
   const source = String(value || "").trim();
-  return /^https?:\/\//i.test(source) || /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(source) ? source : "";
+  return source.length <= 1_300_000 && (/^https?:\/\//i.test(source) || /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(source)) ? source : "";
 }
 function sanitizeNewsHtml(html) {
   const documentCopy = new DOMParser().parseFromString(`<div>${html}</div>`,"text/html");
@@ -265,7 +267,7 @@ function renderTasks() {
 }
 
 function renderNotes() {
-  return items("notas").sort((a,b)=>dueSort(a)-dueSort(b)||(b.date||0)-(a.date||0)).map((note) => row(note.id, (note.text || "Nota").split("\n")[0], `${note.hasDeadline&&note.dueAt?dueLabel(note.dueAt):note.date?localDate(note.date):"Nota sincronizada"}${note.tags ? ` · ${note.tags}` : ""}`, "<span class=\"tag-chip\">Nota</span>", { edit: true, delete: true, urgency: note.hasDeadline ? urgencyClass(note) : "" }));
+  return items("notas").sort((a,b)=>dueSort(a)-dueSort(b)||(b.date||0)-(a.date||0)).map((note) => row(note.id, (note.text || "Nota").split("\n")[0], `${hasDue(note)?dueLabel(note.dueAt):note.date?localDate(note.date):"Nota sincronizada"}${note.tags ? ` · ${note.tags}` : ""}`, "<span class=\"tag-chip\">Nota</span>", { edit: true, delete: true, urgency: hasDue(note) ? urgencyClass(note) : "" }));
 }
 
 function renderCare() {
@@ -412,7 +414,7 @@ function openDialog(id = null) {
     $("#dialog-fields").innerHTML = field("Título", "newsTitle", old?.title || "", "text", "Ex.: Novidade no aplicativo", "required maxlength=\"100\"") +
       field("Resumo curto (opcional)", "newsSubtitle", old?.subtitle || "", "text", "Uma frase para chamar atenção", "maxlength=\"180\"") +
       `<label class="field">Categoria<select name="newsCategory">${["Novidades","Avisos","Atualizações","Eventos","Geral"].map((category)=>`<option ${((old?.category||"Geral")===category)?"selected":""}>${category}</option>`).join("")}</select></label>` +
-      `<label class="field">Imagem de capa (opcional)<span class="news-cover-input"><input name="newsCover" id="news-cover-input" type="url" placeholder="Cole o endereço da imagem ou escolha um arquivo" value="${escapeHtml(old?.coverImage||"")}"/><button type="button" class="button secondary" id="news-cover-choose">Escolher imagem</button><input type="file" id="news-cover-file" accept="image/*" hidden></span><img id="news-cover-preview" class="news-cover-preview ${old?.coverImage?"":"hidden"}" src="${escapeHtml(safeImageSource(old?.coverImage)||"")}" alt="Prévia da capa"></label>` +
+      `<label class="field">Imagem de capa (opcional)<span class="news-cover-input"><input name="newsCover" id="news-cover-input" type="text" placeholder="Cole o endereço da imagem ou escolha um arquivo" value="${escapeHtml(old?.coverImage||"")}"/><button type="button" class="button secondary" id="news-cover-choose">Escolher imagem</button><input type="file" id="news-cover-file" accept="image/*" hidden></span><img id="news-cover-preview" class="news-cover-preview ${old?.coverImage?"":"hidden"}" src="${escapeHtml(safeImageSource(old?.coverImage)||"")}" alt="Prévia da capa"></label>` +
       `<label class="field">Texto da notícia<div class="news-toolbar"><button type="button" data-news-command="bold"><b>B</b></button><button type="button" data-news-command="italic"><i>I</i></button><button type="button" data-news-command="underline"><u>U</u></button><button type="button" data-news-command="formatBlock" data-news-value="h2">Título</button><button type="button" data-news-command="insertUnorderedList">• Lista</button><button type="button" data-news-command="createLink">Link</button><button type="button" id="news-insert-image">Imagem no texto</button><input type="file" id="news-body-file" accept="image/*" hidden></div><div id="news-editor" class="news-editor" contenteditable="true" data-placeholder="Escreva a notícia. Selecione um trecho e use os botões para formatar.">${sanitizeNewsHtml(body)}</div></label>` +
       field("Endereço do botão (opcional)", "newsButtonUrl", old?.buttonUrl || "", "url", "https://…") +
       field("Texto do botão", "newsButtonLabel", old?.buttonLabel || "Saiba mais", "text", "Saiba mais", "maxlength=\"40\"");
