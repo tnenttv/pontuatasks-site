@@ -41,6 +41,9 @@ As tarefas, notas, água, cuidados pessoais e exercícios extras são atualizado
 - Para aplicar essa restrição também no banco, atualize as regras do Realtime Database usando a seção `news` de `realtime-database-rules.example.json`. Preserve as regras existentes do app e acrescente essa seção dentro de `rules`; não abra o banco para acesso público. A leitura é permitida a usuários autenticados e a escrita exige o e-mail administrador.
 - A pontuação e a patente são lidas do backup enviado pelo app. A patente usa os mesmos limites, nomes, faixa de segurança para rebaixamento e insígnias do aplicativo. Deixe o app conectado e abra-o com internet para sincronizar o backup.
 - As tarefas com prazo seguem as mesmas cores de urgência do aplicativo: cinza sem prazo/mais distante, verde quando faltam até 20 horas, amarelo até 8 horas, vermelho até 3 horas, vermelho forte até 1 hora e preto depois do vencimento.
+- A página **Visão geral** reúne as tarefas em aberto, notas com prazo, cuidados pessoais ainda pendentes hoje e os grupos de exercício previstos para o dia. As listas de tarefas e notas priorizam os vencimentos mais próximos; os itens sem prazo ficam depois.
+- Notas agora podem ter um prazo opcional definido no site ou no app Android. O prazo, a ordem e a cor da nota acompanham a sincronização entre os dois.
+- O editor de notícias permite escolher categoria, resumo, imagem de capa e botão com link, além de formatar o texto, criar listas, inserir links e imagens no corpo. Imagens selecionadas do computador são reduzidas antes de serem salvas.
 
 ## Segurança
 
