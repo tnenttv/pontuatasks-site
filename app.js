@@ -186,7 +186,7 @@ function row(id, title, subtitle, trailing = "", options = {}) {
   return `<article class="item-row ${done} ${options.urgency || ""}" data-id="${escapeHtml(id)}" data-kind="${escapeHtml(options.kind || "")}">${check}<div class="item-copy"><div class="item-title">${escapeHtml(title)}</div><div class="item-subtitle">${escapeHtml(subtitle || " ")}</div></div>${trailing}<div class="row-actions">${options.edit ? `<button class="row-action" data-action="edit" data-id="${escapeHtml(id)}" aria-label="Editar" title="Editar">✎</button>` : ""}${remove}</div></article>`;
 }
 
-const hasDue = (item) => (item?.hasDeadline === true || Number(item?.dueAt) > 0) && Number(item?.dueAt) > 0;
+const hasDue = (item) => item?.hasDeadline !== false && Number(item?.dueAt) > 0;
 const dueSort = (item) => hasDue(item) ? Number(item.dueAt) : Number.POSITIVE_INFINITY;
 function dueAtToday(hour = 23, minute = 59) { const date = new Date(); date.setHours(hour, minute, 0, 0); return date.getTime(); }
 function dueLabel(timestamp) { const date = new Date(timestamp); return `Prazo ${localDate(timestamp)} às ${String(date.getHours()).padStart(2,"0")}:${String(date.getMinutes()).padStart(2,"0")}`; }
