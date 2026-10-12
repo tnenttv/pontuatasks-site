@@ -1,5 +1,5 @@
-const CACHE_NAME = "pontua-shell-v5";
-const APP_FILES = ["./", "./index.html", "./styles.css?v=android-parity-3", "./app.js?v=android-parity-3", "./firebase-config.js", "./manifest.webmanifest", "./pontua-logo.png"];
+const CACHE_NAME = "pontua-shell-v6";
+const APP_FILES = ["./", "./index.html", "./styles.css?v=ios-app-1", "./app.js?v=ios-app-1", "./firebase-config.js", "./manifest.webmanifest", "./pontua-logo.png"];
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_FILES)).then(() => self.skipWaiting()));
 });

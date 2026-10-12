@@ -1,16 +1,17 @@
 {
-  "id": "/",
+  "id": "./",
   "name": "Pontua Tasks",
   "short_name": "Pontua",
   "description": "Sua rotina, metas e tarefas em um só lugar.",
   "lang": "pt-BR",
-  "start_url": "./index.html#inicio",
+  "start_url": "./#inicio",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f4f6fa",
-  "theme_color": "#1766bd",
+  "background_color": "#f2f4f7",
+  "theme_color": "#4ebee0",
+  "display_override": ["standalone"],
   "icons": [
-    { "src": "pontua-logo.png", "sizes": "any", "type": "image/png", "purpose": "any" }
+    { "src": "pontua-logo.png", "sizes": "1254x1254", "type": "image/png", "purpose": "any maskable" }
   ]
 }

@@ -733,6 +733,17 @@ onAuthStateChanged(auth, (user) => {
   else { state.data = { tarefas: {}, notas: {}, cuidados: {}, agua: {}, treinos_extras: {}, exercicios_dias: {}, cuidados_dias: {}, desafio: {} }; }
 });
 
+const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isStandaloneApp = navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+if (isIOSDevice && !isStandaloneApp) {
+  $("#ios-login-install").classList.remove("hidden");
+  $("#ios-app-install").classList.remove("hidden");
+}
+const openIOSInstallInstructions = () => $("#ios-install-dialog").showModal();
+$("#ios-login-install").addEventListener("click", openIOSInstallInstructions);
+$("#ios-app-install").addEventListener("click", openIOSInstallInstructions);
+$("#ios-install-close").addEventListener("click", () => $("#ios-install-dialog").close());
+
 function navigateTo(section) { state.section = section; state.filter = section === "tarefas" ? "ativas" : "todas"; state.backupCollectionKey = null; if (location.hash !== `#${section}`) history.replaceState(null, "", `#${section}`); render(); }
 $("#navigation").addEventListener("click", (event) => { const button = event.target.closest("[data-section]"); if (!button) return; if (button.dataset.section === "areas") { $("#areas-dialog").showModal(); return; } navigateTo(button.dataset.section); });
 $("#android-status-panel").addEventListener("click", (event) => { const button = event.target.closest("[data-status-section]"); if (button && sections[button.dataset.statusSection]) navigateTo(button.dataset.statusSection); });

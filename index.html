@@ -2,18 +2,19 @@
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#1766bd" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#4ebee0" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Pontua Tasks" />
-    <link rel="apple-touch-icon" href="pontua-logo.png" />
+    <link rel="apple-touch-icon" sizes="1254x1254" href="pontua-logo.png" />
     <link rel="manifest" href="manifest.webmanifest" />
     <title>Pontua Tasks — sua rotina em movimento</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=android-parity-3" />
+    <link rel="stylesheet" href="styles.css?v=ios-app-1" />
   </head>
   <body>
     <div id="login" class="login-screen">
@@ -25,6 +26,7 @@
         <button id="login-button" class="button primary wide">Continuar com Google</button>
         <p id="login-error" class="error-text" role="alert"></p>
         <div class="login-foot"><span class="live-dot"></span> Sincronização protegida pelo Firebase</div>
+        <button id="ios-login-install" class="ios-login-install hidden" type="button"><span>＋</span><span><b>Adicionar à Tela de Início</b><small>Use o Pontua Tasks como app no iPhone</small></span><span class="install-chevron">›</span></button>
       </div>
       <div class="login-orbit orbit-a"></div><div class="login-orbit orbit-b"></div>
     </div>
@@ -41,7 +43,7 @@
       </aside>
 
       <main class="main-content">
-        <header class="topbar"><div class="breadcrumb"><span>Meu espaço</span><b>/</b><strong id="breadcrumb-current">Tarefas</strong></div><div class="top-actions"><span class="today-label" id="today-label"></span><button id="refresh-button" class="icon-button refresh-button" title="Atualizar dados" aria-label="Atualizar dados">↻</button></div></header>
+        <header class="topbar"><div class="breadcrumb"><span>Meu espaço</span><b>/</b><strong id="breadcrumb-current">Tarefas</strong></div><div class="top-actions"><span class="today-label" id="today-label"></span><button id="ios-app-install" class="icon-button ios-app-install hidden" type="button" title="Como adicionar à Tela de Início" aria-label="Como adicionar à Tela de Início">＋</button><button id="refresh-button" class="icon-button refresh-button" title="Atualizar dados" aria-label="Atualizar dados">↻</button></div></header>
         <section id="android-status-panel" class="android-status-panel" aria-label="Status do Pontua Tasks">
           <button class="android-status-cell" data-status-section="humor"><small>😊 HUMOR</small><strong id="status-mood">—</strong><span id="status-mood-time">Registrar agora</span></button>
           <button class="android-status-cell" data-status-section="estatisticas"><small>⭐ PONTOS</small><strong id="status-points">0</strong><span id="status-rank">Recruta</span></button>
@@ -74,10 +76,11 @@
       <button id="mobile-more-button" type="button"><span>•••</span>Mais</button>
     </nav>
     <dialog id="areas-dialog" class="areas-dialog"><div class="areas-dialog-head"><h2>Áreas do app</h2><button id="areas-close" class="icon-button" aria-label="Fechar">×</button></div><div id="areas-grid" class="areas-grid"></div></dialog>
+    <dialog id="ios-install-dialog" class="ios-install-dialog"><div class="areas-dialog-head"><div><p class="eyebrow">PONTUA TASKS NO IPHONE</p><h2>Adicionar à Tela de Início</h2></div><button id="ios-install-close" class="icon-button" type="button" aria-label="Fechar">×</button></div><ol><li>Abra este site no <b>Safari</b>.</li><li>Toque no botão <b>Compartilhar</b> <span aria-label="Compartilhar">□↑</span>.</li><li>Escolha <b>Adicionar à Tela de Início</b>.</li><li>Se aparecer, ative <b>Abrir como App</b> e toque em <b>Adicionar</b>.</li></ol><p class="ios-install-note">O ícone do Pontua Tasks ficará na sua Tela de Início e abrirá em uma janela própria.</p></dialog>
 
     <dialog id="item-dialog" class="item-dialog"><form id="item-form" method="dialog"><div class="dialog-head"><div><p class="eyebrow">PONTUA TASKS</p><h2 id="dialog-title">Nova tarefa</h2></div><button type="button" id="dialog-close" class="icon-button" aria-label="Fechar">×</button></div><div id="dialog-fields" class="dialog-fields"></div><div class="dialog-actions"><button type="button" id="delete-button" class="button danger hidden">Excluir</button><span></span><button type="button" class="button secondary" id="cancel-button">Cancelar</button><button type="submit" class="button primary">Salvar</button></div></form></dialog>
     <div id="toast" class="toast" role="status"></div>
-    <script type="module" src="app.js?v=android-parity-3"></script>
+    <script type="module" src="app.js?v=ios-app-1"></script>
     <script>if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./service-worker.js').catch(() => {});</script>
   </body>
 </html>
