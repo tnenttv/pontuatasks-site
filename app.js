@@ -57,7 +57,12 @@ const backupTemplates = {
   lembretes_local: { entries: { id:"", title:"", message:"", timeInMillis:0, repeat:"NONE", repeatDays:[], enabled:true } },
   estoque_local: { entries: { id:"", name:"", category:"", quantity:0 } }, trabalho_local: { itens: { id:"", nome:"", observacao:"", temValidade:false, validade:0, createdAt:0, linkedTaskId:"" } },
   checklist_local: { itens: { id:"", nome:"", createdAt:0 } }, consertos_local: { itens: { id:"", marca:"", modelo:"", tags:[], observacao:"", etapa:0, temPrazo:false, prazo:0, valorGasto:0, valorGanho:0, finalizado:false, linkedTaskId:"", createdAt:0, updatedAt:0 } },
-  ferramentas_local: { abastecimentos: { id:"", km:0, litros:0, valor:0, data:0 }, cartoes: { id:"", nome:"", limiteInicial:0, createdAt:0 }, compras_cartao: { id:"", cartaoId:"", produto:"", valorCompra:0, parcelas:1, taxaJuros:0, dataCompra:0 }, parcelas_cartao: { id:"", compraId:"", numero:1, valor:0, vencimento:0, pago:false } }
+  ferramentas_local: { abastecimentos: { id:"", km:0, litros:0, valor:0, data:0 }, cartoes: { id:"", nome:"", limiteInicial:0, createdAt:0 }, compras_cartao: { id:"", cartaoId:"", produto:"", valorCompra:0, parcelas:1, taxaJuros:0, dataCompra:0 }, parcelas_cartao: { id:"", compraId:"", numero:1, valor:0, vencimento:0, pago:false } },
+  calorias_local: {
+    alimentos: { id:"", nome:"", calorias:0, carboidratos:0, proteinas:0, gorduras:0 },
+    refeicoes: { id:"", tipo:"cafe", nome:"", calorias:0, carboidratos:0, proteinas:0, gorduras:0, date:0, quantidade:1 },
+    queimas: { id:"", nome:"", calorias:0, date:0 }
+  }
 };
 for (const [id, title] of androidSections) if (!sections[id] && backupSectionConfig[id]) sections[id] = {
   title, subtitle: `Consulte e atualize ${title.toLowerCase()} com os dados do app.`, add: `Novo registro`, node: "",
@@ -396,10 +401,31 @@ function renderBackupSection() {
   const collectionKeys = [...new Set([...Object.entries(preference).filter(([, value]) => Array.isArray(decodeBackupValue(value))).map(([key]) => key), ...templateKeys])];
   const collections = collectionKeys.map((key) => [key]);
   $("#backup-categories").innerHTML = categories.map((name) => `<button class="category-pill ${name === state.backupCategory ? "selected" : ""}" data-backup-category="${name}">${escapeHtml(backupLabels[name])}</button>`).join("") + collections.map(([key]) => `<button class="category-pill ${key === collection.key ? "selected" : ""}" data-backup-key="${escapeHtml(key)}">${escapeHtml(humanizeKey(key))}</button>`).join("");
+  const calorieSummary = state.backupCategory === "calorias_local" ? renderCalorieSummary() : "";
   return collection.records.map((record, index) => {
-    const preview = typeof record === "object" && record ? Object.entries(record).filter(([key,value]) => key !== "id" && key !== "updatedAt" && value !== "" && value != null && typeof value !== "object").slice(0,3).map(([key,value]) => `${humanizeKey(key)}: ${String(value)}`).join(" · ") : String(record);
+    const preview = state.backupCategory === "calorias_local" ? calorieRecordSubtitle(record, collection.key) : typeof record === "object" && record ? Object.entries(record).filter(([key,value]) => key !== "id" && key !== "updatedAt" && value !== "" && value != null && typeof value !== "object").slice(0,3).map(([key,value]) => `${humanizeKey(key)}: ${String(value)}`).join(" · ") : String(record);
     return row(String(index), recordTitle(record,index), preview || "Registro salvo no backup do app", `<span class="tag-chip">${escapeHtml(backupLabels[state.backupCategory] || "App")}</span>`, { edit: true, delete: true });
-  });
+  }).reduce((rows, item) => rows.concat(item), calorieSummary ? [calorieSummary] : []);
+}
+function renderCalorieSummary() {
+  const today = localDayKey();
+  const meals = decodePref("calorias_local", "refeicoes", []);
+  const burns = decodePref("calorias_local", "queimas", []);
+  const todayMeals = (Array.isArray(meals) ? meals : []).filter((entry) => Number(entry.date) > 0 && localDayKey(new Date(Number(entry.date))) === today);
+  const todayBurns = (Array.isArray(burns) ? burns : []).filter((entry) => Number(entry.date) > 0 && localDayKey(new Date(Number(entry.date))) === today);
+  const consumed = todayMeals.reduce((total, entry) => total + Number(entry.calorias || 0), 0);
+  const burned = todayBurns.reduce((total, entry) => total + Number(entry.calorias || 0), 0);
+  return `<article class="item-row"><span class="stat-icon amber-icon">♨</span><div class="item-copy"><div class="item-title">${consumed.toLocaleString("pt-BR")} kcal consumidas hoje</div><div class="item-subtitle">${burned.toLocaleString("pt-BR")} kcal em atividades extras · saldo ${ (consumed - burned).toLocaleString("pt-BR") } kcal</div></div><span class="tag-chip">Hoje</span></article>`;
+}
+function calorieRecordSubtitle(record, key) {
+  if (!record || typeof record !== "object") return String(record ?? "");
+  if (key === "alimentos") return `${Number(record.calorias || 0)} kcal · C ${Number(record.carboidratos || 0)}g · P ${Number(record.proteinas || 0)}g · G ${Number(record.gorduras || 0)}g`;
+  if (key === "refeicoes") {
+    const types = { cafe: "Café da manhã", almoco: "Almoço", jantar: "Jantar", lanche: "Lanche" };
+    const date = Number(record.date) > 0 ? ` · ${localDate(record.date)}` : "";
+    return `${types[record.tipo] || record.tipo || "Refeição"} · ${Number(record.calorias || 0)} kcal${Number(record.quantidade) > 1 ? ` · ${record.quantidade} porções` : ""}${date}`;
+  }
+  return `${Number(record.calorias || 0)} kcal${Number(record.date) > 0 ? ` · ${localDate(record.date)}` : ""}`;
 }
 function humanizeKey(key) {
   return key.replace(/([a-z])([A-Z])/g,"$1 $2").replace(/_/g," ").replace(/^./,(letter)=>letter.toUpperCase());
@@ -466,7 +492,8 @@ async function deleteBackupRecord(index) {
   await saveBackupCollection(collection); $("#item-dialog").close(); render(); message("Registro removido do backup.");
 }
 function newBackupRecord(sample) {
-  return Object.fromEntries(Object.entries(sample).map(([key,value]) => [key, key === "id" ? crypto.randomUUID() : key === "updatedAt" ? Date.now() : typeof value === "boolean" ? false : typeof value === "number" && value > 1000000000000 && /(date|time|deadline|createdat|completedat|timestamp)/i.test(key) ? Date.now() : typeof value === "number" ? 0 : typeof value === "string" ? "" : Array.isArray(value) ? [] : value && typeof value === "object" ? {} : ""]));
+  const timestampField = /^(date|dueAt|startAt|endAt|createdAt|updatedAt|completedAt|timestamp|timeInMillis|prazo|validade|vencimento|data|dataCompra)$/i;
+  return Object.fromEntries(Object.entries(sample).map(([key,value]) => [key, key === "id" ? crypto.randomUUID() : key === "updatedAt" || timestampField.test(key) ? Date.now() : typeof value === "boolean" ? false : typeof value === "number" ? 0 : typeof value === "string" ? "" : Array.isArray(value) ? [] : value && typeof value === "object" ? {} : ""]));
 }
 
 function field(label, name, value = "", type = "text", placeholder = "", extra = "") {
