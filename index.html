@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=ios-app-1" />
+    <link rel="stylesheet" href="styles.css?v=ios-app-2" />
   </head>
   <body>
     <div id="login" class="login-screen">
@@ -71,16 +71,15 @@
     </div>
 
     <nav id="mobile-navigation" class="mobile-navigation hidden" aria-label="Navegação móvel">
-      <button data-section="inicio"><span>⌂</span>Início</button><button data-section="tarefas"><span>✓</span>Tarefas</button>
-      <button data-section="cuidados"><span>♡</span>Cuidados</button><button data-section="agua"><span>◉</span>Água</button>
-      <button id="mobile-more-button" type="button"><span>•••</span>Mais</button>
+      <button data-section="inicio"><span>⌂</span>Início</button><button id="mobile-add-button" type="button"><span>＋</span>Nova</button>
+      <button id="mobile-more-button" type="button"><span>☰</span>Menu</button>
     </nav>
     <dialog id="areas-dialog" class="areas-dialog"><div class="areas-dialog-head"><h2>Áreas do app</h2><button id="areas-close" class="icon-button" aria-label="Fechar">×</button></div><div id="areas-grid" class="areas-grid"></div></dialog>
     <dialog id="ios-install-dialog" class="ios-install-dialog"><div class="areas-dialog-head"><div><p class="eyebrow">PONTUA TASKS NO IPHONE</p><h2>Adicionar à Tela de Início</h2></div><button id="ios-install-close" class="icon-button" type="button" aria-label="Fechar">×</button></div><ol><li>Abra este site no <b>Safari</b>.</li><li>Toque no botão <b>Compartilhar</b> <span aria-label="Compartilhar">□↑</span>.</li><li>Escolha <b>Adicionar à Tela de Início</b>.</li><li>Se aparecer, ative <b>Abrir como App</b> e toque em <b>Adicionar</b>.</li></ol><p class="ios-install-note">O ícone do Pontua Tasks ficará na sua Tela de Início e abrirá em uma janela própria.</p></dialog>
 
     <dialog id="item-dialog" class="item-dialog"><form id="item-form" method="dialog"><div class="dialog-head"><div><p class="eyebrow">PONTUA TASKS</p><h2 id="dialog-title">Nova tarefa</h2></div><button type="button" id="dialog-close" class="icon-button" aria-label="Fechar">×</button></div><div id="dialog-fields" class="dialog-fields"></div><div class="dialog-actions"><button type="button" id="delete-button" class="button danger hidden">Excluir</button><span></span><button type="button" class="button secondary" id="cancel-button">Cancelar</button><button type="submit" class="button primary">Salvar</button></div></form></dialog>
     <div id="toast" class="toast" role="status"></div>
-    <script type="module" src="app.js?v=ios-app-1"></script>
+    <script type="module" src="app.js?v=ios-app-2"></script>
     <script>if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./service-worker.js').catch(() => {});</script>
   </body>
 </html>

@@ -139,7 +139,7 @@ function render() {
   $("#empty-copy").textContent = config.emptyCopy;
   $("#navigation").querySelectorAll(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.section === state.section));
   $("#mobile-navigation").querySelectorAll("[data-section]").forEach((button) => button.classList.toggle("active", button.dataset.section === state.section));
-  $("#mobile-more-button").classList.toggle("active", !["inicio", "tarefas", "cuidados", "agua"].includes(state.section));
+  $("#mobile-more-button").classList.toggle("active", state.section !== "inicio");
   $("#overview").classList.toggle("hidden", state.section !== "inicio");
   $("#filters").classList.toggle("hidden", state.section !== "tarefas");
   $("#add-button").classList.toggle("hidden", state.section === "mais" || state.section === "inicio");
@@ -748,6 +748,7 @@ function navigateTo(section) { state.section = section; state.filter = section =
 $("#navigation").addEventListener("click", (event) => { const button = event.target.closest("[data-section]"); if (!button) return; if (button.dataset.section === "areas") { $("#areas-dialog").showModal(); return; } navigateTo(button.dataset.section); });
 $("#android-status-panel").addEventListener("click", (event) => { const button = event.target.closest("[data-status-section]"); if (button && sections[button.dataset.statusSection]) navigateTo(button.dataset.statusSection); });
 $("#mobile-navigation").addEventListener("click", (event) => { const button = event.target.closest("[data-section]"); if (button) navigateTo(button.dataset.section); });
+$("#mobile-add-button").addEventListener("click", () => $("#add-button").click());
 $("#mobile-more-button").addEventListener("click", () => $("#areas-dialog").showModal());
 $("#areas-close").addEventListener("click", () => $("#areas-dialog").close());
 $("#areas-grid").addEventListener("click", (event) => { const button = event.target.closest("[data-section]"); if (button) { $("#areas-dialog").close(); navigateTo(button.dataset.section); } });
