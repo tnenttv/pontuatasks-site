@@ -3,7 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#123c35" />
+    <meta name="theme-color" content="#1766bd" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Pontua Tasks" />
+    <link rel="apple-touch-icon" href="pontua-logo.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
     <title>Pontua Tasks — sua rotina em movimento</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -28,16 +33,7 @@
       <aside class="sidebar">
         <a class="brand" href="#inicio"><img class="sidebar-logo" src="pontua-logo.png" alt="" /><span>Pontua<span class="brand-light">Tasks</span></span></a>
         <div class="workspace-label">SEU ESPAÇO</div>
-        <nav id="navigation" class="navigation" aria-label="Seções">
-          <button data-section="inicio" class="nav-item active"><span class="nav-icon">⌂</span>Visão geral</button>
-          <button data-section="tarefas" class="nav-item active"><span class="nav-icon">▦</span>Tarefas <span id="nav-task-count" class="nav-count"></span></button>
-          <button data-section="cuidados" class="nav-item"><span class="nav-icon">♡</span>Cuidados pessoais</button>
-          <button data-section="agua" class="nav-item"><span class="nav-icon">◉</span>Água</button>
-          <button data-section="notas" class="nav-item"><span class="nav-icon">▤</span>Notas</button>
-          <button data-section="exercicios" class="nav-item"><span class="nav-icon">↗</span>Exercícios</button>
-          <button data-section="mais" class="nav-item"><span class="nav-icon">•••</span>Mais áreas</button>
-          <button data-section="noticias" class="nav-item"><span class="nav-icon">▣</span>Notícias</button>
-        </nav>
+        <nav id="navigation" class="navigation" aria-label="Seções"></nav>
         <div class="sidebar-bottom">
           <div class="sync-card"><span class="live-dot"></span><span><b>Conectado à nuvem</b><small>Atualizações em tempo real</small></span></div>
           <div class="profile"><div id="avatar" class="avatar">P</div><div class="profile-copy"><b id="profile-name">Minha conta</b><small id="profile-email"></small></div><button id="logout-button" class="icon-button" aria-label="Sair da conta" title="Sair">↗</button></div>
@@ -66,8 +62,16 @@
       </main>
     </div>
 
+    <nav id="mobile-navigation" class="mobile-navigation hidden" aria-label="Navegação móvel">
+      <button data-section="inicio"><span>⌂</span>Início</button><button data-section="tarefas"><span>✓</span>Tarefas</button>
+      <button data-section="cuidados"><span>♡</span>Cuidados</button><button data-section="agua"><span>◉</span>Água</button>
+      <button id="mobile-more-button" type="button"><span>•••</span>Mais</button>
+    </nav>
+    <dialog id="areas-dialog" class="areas-dialog"><div class="areas-dialog-head"><h2>Áreas do app</h2><button id="areas-close" class="icon-button" aria-label="Fechar">×</button></div><div id="areas-grid" class="areas-grid"></div></dialog>
+
     <dialog id="item-dialog" class="item-dialog"><form id="item-form" method="dialog"><div class="dialog-head"><div><p class="eyebrow">PONTUA TASKS</p><h2 id="dialog-title">Nova tarefa</h2></div><button type="button" id="dialog-close" class="icon-button" aria-label="Fechar">×</button></div><div id="dialog-fields" class="dialog-fields"></div><div class="dialog-actions"><button type="button" id="delete-button" class="button danger hidden">Excluir</button><span></span><button type="button" class="button secondary" id="cancel-button">Cancelar</button><button type="submit" class="button primary">Salvar</button></div></form></dialog>
     <div id="toast" class="toast" role="status"></div>
     <script type="module" src="app.js"></script>
+    <script>if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./service-worker.js').catch(() => {});</script>
   </body>
 </html>

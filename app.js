@@ -11,7 +11,7 @@ const ADMIN_EMAIL = "sotrabalho683@gmail.com";
 const LEVEL_THRESHOLDS = [0,50,100,180,280,400,550,750,1000,1300,1650,2050,2500,3000,3550,4150,4800,5500];
 const LEVEL_FLOORS = [0,35,70,140,220,330,470,650,880,1150,1450,1800,2200,2650,3150,3700,4300,4800];
 const LEVEL_NAMES = ["Recruta","Soldado","Cabo","3º Sargento","2º Sargento","1º Sargento","Subtenente","Aspirante","2º Tenente","1º Tenente","Capitão","Major","Tenente-Coronel","Coronel","General de Brigada","General de Divisão","General de Exército","General"];
-const state = { user: null, section: "inicio", filter: "todas", data: { tarefas: {}, notas: {}, cuidados: {}, agua: {}, treinos_extras: {}, exercicios_dias: {}, cuidados_dias: {} }, backup: {}, news: {}, backupCategory: "diary_local", listeners: [], editId: null, editIndex: null, toastTimer: null };
+const state = { user: null, section: "inicio", filter: "todas", data: { tarefas: {}, notas: {}, cuidados: {}, agua: {}, treinos_extras: {}, exercicios_dias: {}, cuidados_dias: {} }, backup: {}, news: {}, backupCategory: "diary_local", backupCollectionKey: null, listeners: [], editId: null, editIndex: null, toastTimer: null };
 const sections = {
   inicio: { title: "Visão geral", subtitle: "Tudo que está em aberto ou vence hoje, em um só lugar.", add: "Nova tarefa", node: "tarefas", empty: "Nada pendente por aqui", emptyCopy: "Suas tarefas, cuidados e exercícios em aberto aparecerão nesta página." },
   tarefas: { title: "Suas tarefas", subtitle: "Organize o que importa e comemore cada avanço.", add: "Nova tarefa", node: "tarefas", empty: "Tudo começa com um primeiro passo", emptyCopy: "Adicione uma tarefa e ela aparecerá aqui e no aplicativo." },
@@ -22,7 +22,57 @@ const sections = {
   mais: { title: "Mais áreas do app", subtitle: "Seus outros dados salvos na mesma conta, com sincronização pelo backup do app.", add: "Novo registro", node: "", empty: "Nenhum registro nesta área", emptyCopy: "Seus dados aparecem aqui depois que o app salva o backup na nuvem." },
   noticias: { title: "Notícias", subtitle: "Avisos e novidades do Pontua Tasks.", add: "Publicar notícia", node: "", empty: "Nenhuma notícia por enquanto", emptyCopy: "As novidades publicadas aparecerão aqui." }
 };
-const backupLabels = { diary_local:"Diário", humor_local:"Humor", financas_local:"Finanças", dividas_local:"Dívidas", dividas_recorrentes_local:"Dívidas recorrentes", mensagens_local:"Mensagens", livros_local:"Livros", sono_local:"Sono", estudos_local:"Estudos", emprestimos_local:"Empréstimos", lembretes_local:"Lembretes", estoque_local:"Estoque", ferramentas_local:"Ferramentas", calorias_local:"Alimentação", historico_local:"Histórico", config_local:"Configurações" };
+// Áreas que no Android ainda vivem no backup de SharedPreferences. Cada tela
+// aponta para a preferência real para que edições web sejam aplicadas pelo app.
+const androidSections = [
+  ["inicio", "Início", "⌂"], ["tarefas", "Tarefas", "✓"], ["cuidados", "Cuidados", "♡"],
+  ["exercicios", "Exercícios", "↗"], ["agua", "Água", "◉"], ["sono", "Sono", "☾"],
+  ["financas", "Finanças", "$"], ["estudos", "Estudos", "▤"], ["checklist", "Checklist", "☑"],
+  ["calorias", "Calorias", "♨"], ["trabalho", "Trabalho", "▣"], ["conserto", "Conserto celular", "▱"],
+  ["livros", "Livros", "▥"], ["humor", "Humor", "☺"], ["diario", "Diário", "✎"],
+  ["notas", "Notas", "▤"], ["ferramentas", "Ferramentas", "⚒"], ["lembretes", "Lembretes", "◷"],
+  ["estoque", "Meu estoque", "▦"], ["estatisticas", "Estatísticas", "▥"], ["mensagens", "Mensagens", "✉"],
+  ["dividas", "Dívidas", "$"], ["dividas-recorrentes", "Dívidas recorrentes", "↻"], ["emprestimos", "Empréstimos", "⇄"],
+  ["opcoes", "Opções", "⚙"]
+];
+const backupSectionConfig = {
+  sono: ["sono_local", "Sono"], financas: ["financas_local", "Finanças"], estudos: ["estudos_local", "Estudos"],
+  checklist: ["checklist_local", "Checklist diário"], calorias: ["calorias_local", "Calorias"], trabalho: ["trabalho_local", "Trabalho"],
+  conserto: ["consertos_local", "Conserto celular"], livros: ["livros_local", "Livros"], humor: ["humor_local", "Humor"],
+  diario: ["diary_local", "Diário"], ferramentas: ["ferramentas_local", "Ferramentas"], lembretes: ["lembretes_local", "Lembretes"],
+  estoque: ["estoque_local", "Meu estoque"], estatisticas: ["historico_local", "Estatísticas e histórico"], mensagens: ["mensagens_local", "Mensagens"],
+  opcoes: ["config_local", "Opções"], "dividas": ["dividas_local", "Dívidas"],
+  "dividas-recorrentes": ["dividas_recorrentes_local", "Dívidas recorrentes"], emprestimos: ["emprestimos_local", "Empréstimos"]
+};
+// Schemas come from the Android data classes and preference keys. They let the
+// web create records in an empty area without guessing a different data format.
+const backupTemplates = {
+  diary_local: { entries: { id:"", title:"", body:"", date:0 } }, humor_local: { entries: { id:"", categoriaId:"neutro", intensidade:3, note:"", date:0 } },
+  financas_local: { entries: { id:"", type:"gasto", amount:0, description:"", date:0, linkedDebtInstallment:"", category:"" } },
+  dividas_local: { entries: { id:"", title:"", installmentValue:0, totalInstallments:1, installments:[] } },
+  dividas_recorrentes_local: { entries: { id:"", title:"", amount:0, dueDay:1, totalInstallments:0, installmentsPaid:0, active:true, ultimoCicloGerado:"" } },
+  emprestimos_local: { entries: { id:"", title:"", totalAmount:0, interestRatePercent:0, totalInstallments:1, installments:[], createdAt:0, withdrawAddedToBalance:false, active:true } },
+  mensagens_local: { entries: { id:"", text:"" } }, sono_local: { entries: { id:"", hours:0, quality:3, date:0, startAt:0, endAt:0 } },
+  estudos_local: { entries: { id:"", name:"", topics:[], observacoes:"" } }, livros_local: { entries: { id:"", title:"", totalPages:0, pagesRead:0, note:"", finished:false, rating:0, review:"", date:0, pointsAwarded:0 } },
+  lembretes_local: { entries: { id:"", title:"", message:"", timeInMillis:0, repeat:"NONE", repeatDays:[], enabled:true } },
+  estoque_local: { entries: { id:"", name:"", category:"", quantity:0 } }, trabalho_local: { itens: { id:"", nome:"", observacao:"", temValidade:false, validade:0, createdAt:0, linkedTaskId:"" } },
+  checklist_local: { itens: { id:"", nome:"", createdAt:0 } }, consertos_local: { itens: { id:"", marca:"", modelo:"", tags:[], observacao:"", etapa:0, temPrazo:false, prazo:0, valorGasto:0, valorGanho:0, finalizado:false, linkedTaskId:"", createdAt:0, updatedAt:0 } },
+  ferramentas_local: { abastecimentos: { id:"", km:0, litros:0, valor:0, data:0 }, cartoes: { id:"", nome:"", limiteInicial:0, createdAt:0 }, compras_cartao: { id:"", cartaoId:"", produto:"", valorCompra:0, parcelas:1, taxaJuros:0, dataCompra:0 }, parcelas_cartao: { id:"", compraId:"", numero:1, valor:0, vencimento:0, pago:false } }
+};
+for (const [id, title] of androidSections) if (!sections[id] && backupSectionConfig[id]) sections[id] = {
+  title, subtitle: `Consulte e atualize ${title.toLowerCase()} com os dados do app.`, add: `Novo registro`, node: "",
+  empty: `Nenhum dado de ${title.toLowerCase()} no backup`, emptyCopy: "Abra o app conectado para enviar o backup mais recente.",
+  backupCategory: backupSectionConfig[id][0]
+};
+const backupLabels = { diary_local:"Diário", humor_local:"Humor", financas_local:"Finanças", dividas_local:"Dívidas", dividas_recorrentes_local:"Dívidas recorrentes", mensagens_local:"Mensagens", livros_local:"Livros", sono_local:"Sono", estudos_local:"Estudos", emprestimos_local:"Empréstimos", lembretes_local:"Lembretes", estoque_local:"Estoque", ferramentas_local:"Ferramentas", calorias_local:"Alimentação", historico_local:"Histórico", config_local:"Configurações", trabalho_local:"Trabalho", checklist_local:"Checklist diário", consertos_local:"Conserto celular", perdao_streak_local:"Sequências", agua_local:"Água", cuidados_local:"Cuidados", exercicios_local:"Exercícios", dividas_recorrentes_local:"Dívidas recorrentes" };
+const isBackupSection = (section = state.section) => !!sections[section]?.backupCategory;
+function buildNavigation() {
+  const navItems = [...androidSections, ["mais", "Mais dados", "•••"], ["noticias", "Notícias", "▣"]];
+  $("#navigation").innerHTML = navItems.map(([id, label, icon]) => `<button data-section="${id}" class="nav-item"><span class="nav-icon">${icon}</span>${label}${id === "tarefas" ? ' <span id="nav-task-count" class="nav-count"></span>' : ""}</button>`).join("");
+  const moreItems = navItems.filter(([id]) => !["inicio", "tarefas", "cuidados", "agua"].includes(id));
+  $("#areas-grid").innerHTML = moreItems.map(([id, label, icon]) => `<button class="area-choice" data-section="${id}"><span>${icon}</span>${label}</button>`).join("");
+}
+buildNavigation();
 const priorityName = (value) => Number(value) >= 2 ? "Prioridade alta" : Number(value) === 1 ? "Prioridade média" : "Normal";
 const escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const localDate = (time) => { const d = new Date(Number(time)); return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`; };
@@ -72,6 +122,8 @@ function updateAccount(user) {
 
 function render() {
   const config = sections[state.section];
+  if (!config) return;
+  if (config.backupCategory) state.backupCategory = config.backupCategory;
   $("#breadcrumb-current").textContent = config.title;
   $("#page-title").innerHTML = `${escapeHtml(config.title)}<span class="period">.</span>`;
   $("#page-subtitle").textContent = state.section === "mais" ? `${config.subtitle} As mudanças chegam ao app quando você atualiza a tela nele.` : config.subtitle;
@@ -79,13 +131,17 @@ function render() {
   $("#empty-title").textContent = config.empty;
   $("#empty-copy").textContent = config.emptyCopy;
   $("#navigation").querySelectorAll(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.section === state.section));
+  $("#mobile-navigation").querySelectorAll("[data-section]").forEach((button) => button.classList.toggle("active", button.dataset.section === state.section));
+  $("#mobile-more-button").classList.toggle("active", !["inicio", "tarefas", "cuidados", "agua"].includes(state.section));
   $("#overview").classList.toggle("hidden", state.section !== "inicio");
   $("#filters").classList.toggle("hidden", state.section !== "tarefas");
-  $("#add-button").classList.toggle("hidden", state.section === "mais");
+  $("#add-button").classList.toggle("hidden", state.section === "mais" || state.section === "inicio");
   $("#add-button").classList.toggle("hidden", state.section === "noticias" && !isAdmin());
   $("#import-backup-button").classList.toggle("hidden", state.section !== "mais");
-  $("#backup-categories").classList.toggle("hidden", state.section !== "mais");
-  const filterHint = state.section === "mais" ? "Backup do app" : state.section === "noticias" ? "Avisos do Pontua Tasks" : "Sincronizado com o app";
+  const backupView = state.section === "mais" || isBackupSection();
+  $("#backup-categories").classList.toggle("hidden", !backupView);
+  $("#mobile-navigation").classList.toggle("hidden", !state.user);
+  const filterHint = backupView ? "Backup do app · atualize o app para receber mudanças" : state.section === "noticias" ? "Avisos do Pontua Tasks" : "Sincronizado com o app";
   $("#section-helper").innerHTML = `<span class="live-dot"></span> ${filterHint}`;
   $("#filters").querySelectorAll(".filter-pill").forEach((button) => button.classList.toggle("selected", button.dataset.filter === state.filter));
   const taskList = items("tarefas");
@@ -112,8 +168,12 @@ function render() {
   if (state.section === "agua") rows = renderWater();
   if (state.section === "exercicios") rows = renderExercises();
   if (state.section === "mais") rows = renderBackupSection();
+  if (isBackupSection()) rows = renderBackupSection();
   if (state.section === "noticias") rows = renderNews();
-  if (state.section === "mais") $("#add-button").classList.toggle("hidden", !backupCollection().records.length);
+  if (state.section === "mais" || isBackupSection()) {
+    const collection = backupCollection();
+    $("#add-button").classList.toggle("hidden", !collection.records.length && !collection.template);
+  }
   $("#list").innerHTML = rows.join("");
   $("#empty-state").classList.toggle("hidden", rows.length > 0);
 }
@@ -306,10 +366,18 @@ function decodeBackupValue(value) {
 }
 function backupCollection() {
   const preference = state.backup[state.backupCategory] || {};
+  const routeTemplates = backupTemplates[state.backupCategory] || {};
+  if (state.backupCollectionKey && preference[state.backupCollectionKey] != null) {
+    const selected = decodeBackupValue(preference[state.backupCollectionKey]);
+    if (Array.isArray(selected)) return { preference, key: state.backupCollectionKey, records: selected };
+  }
+  if (state.backupCollectionKey && routeTemplates[state.backupCollectionKey]) return { preference, key: state.backupCollectionKey, records: [], template: routeTemplates[state.backupCollectionKey] };
   for (const [key, value] of Object.entries(preference)) {
     const decoded = decodeBackupValue(value);
-    if (Array.isArray(decoded)) return { preference, key, records: decoded };
+    if (Array.isArray(decoded)) { state.backupCollectionKey = key; return { preference, key, records: decoded }; }
   }
+  const templateKey = state.backupCollectionKey && routeTemplates[state.backupCollectionKey] ? state.backupCollectionKey : Object.keys(routeTemplates)[0];
+  if (templateKey) { state.backupCollectionKey = templateKey; return { preference, key: templateKey, records: [], template: routeTemplates[templateKey] }; }
   return { preference, key: Object.prototype.hasOwnProperty.call(preference, "entries") ? "entries" : "entries", records: [] };
 }
 function backupCategories() {
@@ -320,10 +388,14 @@ function recordTitle(record, index) {
   return record.title || record.name || record.nome || record.text || record.titulo || record.exercicio || record.assunto || record.tipo || `Registro ${index + 1}`;
 }
 function renderBackupSection() {
-  let categories = backupCategories();
+  let categories = isBackupSection() ? [sections[state.section].backupCategory] : backupCategories();
   if (categories.length && !categories.includes(state.backupCategory)) state.backupCategory = categories[0];
-  $("#backup-categories").innerHTML = categories.map((name) => `<button class="category-pill ${name === state.backupCategory ? "selected" : ""}" data-backup-category="${name}">${escapeHtml(backupLabels[name])}</button>`).join("");
   const collection = backupCollection();
+  const preference = state.backup[state.backupCategory] || {};
+  const templateKeys = Object.keys(backupTemplates[state.backupCategory] || {});
+  const collectionKeys = [...new Set([...Object.entries(preference).filter(([, value]) => Array.isArray(decodeBackupValue(value))).map(([key]) => key), ...templateKeys])];
+  const collections = collectionKeys.map((key) => [key]);
+  $("#backup-categories").innerHTML = categories.map((name) => `<button class="category-pill ${name === state.backupCategory ? "selected" : ""}" data-backup-category="${name}">${escapeHtml(backupLabels[name])}</button>`).join("") + collections.map(([key]) => `<button class="category-pill ${key === collection.key ? "selected" : ""}" data-backup-key="${escapeHtml(key)}">${escapeHtml(humanizeKey(key))}</button>`).join("");
   return collection.records.map((record, index) => {
     const preview = typeof record === "object" && record ? Object.entries(record).filter(([key,value]) => key !== "id" && key !== "updatedAt" && value !== "" && value != null && typeof value !== "object").slice(0,3).map(([key,value]) => `${humanizeKey(key)}: ${String(value)}`).join(" · ") : String(record);
     return row(String(index), recordTitle(record,index), preview || "Registro salvo no backup do app", `<span class="tag-chip">${escapeHtml(backupLabels[state.backupCategory] || "App")}</span>`, { edit: true, delete: true });
@@ -337,7 +409,7 @@ function openBackupDialog(index = null) {
   const collection = backupCollection();
   const old = index == null ? null : collection.records[Number(index)];
   state.editIndex = index == null ? null : Number(index);
-  const model = old || (collection.records[0] ? newBackupRecord(collection.records[0]) : null);
+  const model = old || (collection.records[0] ? newBackupRecord(collection.records[0]) : collection.template ? newBackupRecord(collection.template) : null);
   if (!model || typeof model !== "object") return message("Ainda não há um modelo de registro nesta área.");
   $("#dialog-title").textContent = old ? `Editar registro · ${backupLabels[state.backupCategory]}` : `Novo registro · ${backupLabels[state.backupCategory]}`;
   $("#delete-button").classList.toggle("hidden", !old);
@@ -358,7 +430,7 @@ function openBackupDialog(index = null) {
 
 async function saveBackupRecord(form) {
   const collection = backupCollection();
-  const model = state.editIndex == null ? (collection.records[0] ? newBackupRecord(collection.records[0]) : null) : collection.records[state.editIndex];
+  const model = state.editIndex == null ? (collection.records[0] ? newBackupRecord(collection.records[0]) : collection.template ? newBackupRecord(collection.template) : null) : collection.records[state.editIndex];
   if (!model || typeof model !== "object") return message("Não encontramos um registro para usar como modelo.");
   const record = { ...model };
   for (const [key, value] of Object.entries(model)) {
@@ -382,8 +454,7 @@ async function saveBackupRecord(form) {
 
 async function saveBackupCollection(collection) {
   const pref = { ...(state.backup[collection.preference] || {}) };
-  const oldValue = pref[collection.key];
-  pref[collection.key] = typeof oldValue === "string" ? JSON.stringify(collection.records) : collection.records;
+  pref[collection.key] = JSON.stringify(collection.records);
   state.backup[collection.preference] = pref;
   await set(ref(database, `users/${state.user.uid}/webPatch/${collection.preference}/${collection.key}`), { value: pref[collection.key], updatedAt: Date.now() });
 }
@@ -544,24 +615,29 @@ onAuthStateChanged(auth, (user) => {
   if (!user) { state.listeners.forEach((unsubscribe) => unsubscribe()); state.listeners = []; }
   state.user = user;
   $("#login").classList.toggle("hidden", !!user); $("#app").classList.toggle("hidden", !user);
-  if (user) { updateAccount(user); attachLiveData(); render(); }
+  if (user) { const requested = location.hash.slice(1); if (sections[requested]) state.section = requested; updateAccount(user); attachLiveData(); render(); }
   else { state.data = { tarefas: {}, notas: {}, cuidados: {}, agua: {}, treinos_extras: {}, exercicios_dias: {}, cuidados_dias: {} }; }
 });
 
-$("#navigation").addEventListener("click", (event) => { const button = event.target.closest("[data-section]"); if (button) { state.section = button.dataset.section; state.filter = "todas"; render(); } });
+function navigateTo(section) { state.section = section; state.filter = "todas"; state.backupCollectionKey = null; if (location.hash !== `#${section}`) history.replaceState(null, "", `#${section}`); render(); }
+$("#navigation").addEventListener("click", (event) => { const button = event.target.closest("[data-section]"); if (button) navigateTo(button.dataset.section); });
+$("#mobile-navigation").addEventListener("click", (event) => { const button = event.target.closest("[data-section]"); if (button) navigateTo(button.dataset.section); });
+$("#mobile-more-button").addEventListener("click", () => $("#areas-dialog").showModal());
+$("#areas-close").addEventListener("click", () => $("#areas-dialog").close());
+$("#areas-grid").addEventListener("click", (event) => { const button = event.target.closest("[data-section]"); if (button) { $("#areas-dialog").close(); navigateTo(button.dataset.section); } });
 $("#filters").addEventListener("click", (event) => { const button = event.target.closest("[data-filter]"); if (button) { state.filter = button.dataset.filter; render(); } });
 $("#add-button").addEventListener("click", () => {
-  if (state.section === "mais") return openBackupDialog();
+  if (state.section === "mais" || isBackupSection()) return openBackupDialog();
   if (state.section === "inicio") { state.section = "tarefas"; render(); }
   openDialog();
 });
 $("#dialog-close").addEventListener("click", () => $("#item-dialog").close());
 $("#cancel-button").addEventListener("click", () => $("#item-dialog").close());
 $("#delete-button").addEventListener("click", () => {
-  if (state.section === "mais") deleteBackupRecord(state.editIndex).catch(showError);
+  if (state.section === "mais" || isBackupSection()) deleteBackupRecord(state.editIndex).catch(showError);
   else if (state.editId) deleteItem(state.editId).catch(showError);
 });
-$("#item-form").addEventListener("submit", (event) => { event.preventDefault(); (state.section === "mais" ? saveBackupRecord(event.currentTarget) : saveItem(event.currentTarget)).catch(showError); });
+$("#item-form").addEventListener("submit", (event) => { event.preventDefault(); (state.section === "mais" || isBackupSection() ? saveBackupRecord(event.currentTarget) : saveItem(event.currentTarget)).catch(showError); });
 $("#refresh-button").addEventListener("click", () => { if (state.user) { attachLiveData(); message("Conferindo seus dados mais recentes."); } });
 $("#import-backup-button").addEventListener("click", async () => {
   if (!state.user || !confirm("Importar do backup do app tarefas, água, cuidados e exercícios extras que ainda não estejam na nuvem? Itens com o mesmo identificador serão mantidos.")) return;
@@ -628,7 +704,7 @@ $("#list").addEventListener("click", async (event) => {
       if (action === "edit") return openDialog(id);
       if (action === "delete") return deleteItem(id);
     }
-    if (state.section === "mais") {
+    if (state.section === "mais" || isBackupSection()) {
       if (action === "edit") return openBackupDialog(id);
       if (action === "delete") return deleteBackupRecord(id);
     }
@@ -647,7 +723,9 @@ $("#list").addEventListener("click", async (event) => {
 
 $("#backup-categories").addEventListener("click", (event) => {
   const button = event.target.closest("[data-backup-category]");
-  if (button) { state.backupCategory = button.dataset.backupCategory; state.editIndex = null; render(); }
+  const keyButton = event.target.closest("[data-backup-key]");
+  if (button) { state.backupCategory = button.dataset.backupCategory; state.backupCollectionKey = null; state.editIndex = null; render(); }
+  else if (keyButton) { state.backupCollectionKey = keyButton.dataset.backupKey; state.editIndex = null; render(); }
 });
 
 $("#today-label").textContent = new Intl.DateTimeFormat("pt-BR", { weekday: "short", day: "numeric", month: "short" }).format(new Date());
