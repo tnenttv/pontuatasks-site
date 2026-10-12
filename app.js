@@ -11,7 +11,7 @@ const ADMIN_EMAIL = "sotrabalho683@gmail.com";
 const LEVEL_THRESHOLDS = [0,50,100,180,280,400,550,750,1000,1300,1650,2050,2500,3000,3550,4150,4800,5500];
 const LEVEL_FLOORS = [0,35,70,140,220,330,470,650,880,1150,1450,1800,2200,2650,3150,3700,4300,4800];
 const LEVEL_NAMES = ["Recruta","Soldado","Cabo","3º Sargento","2º Sargento","1º Sargento","Subtenente","Aspirante","2º Tenente","1º Tenente","Capitão","Major","Tenente-Coronel","Coronel","General de Brigada","General de Divisão","General de Exército","General"];
-const state = { user: null, section: "inicio", filter: "ativas", data: { tarefas: {}, notas: {}, cuidados: {}, agua: {}, treinos_extras: {}, exercicios_dias: {}, cuidados_dias: {} }, backup: {}, news: {}, backupCategory: "diary_local", backupCollectionKey: null, listeners: [], editId: null, editIndex: null, toastTimer: null };
+const state = { user: null, section: "inicio", filter: "ativas", data: { tarefas: {}, notas: {}, cuidados: {}, agua: {}, treinos_extras: {}, exercicios_dias: {}, cuidados_dias: {}, desafio: {} }, backup: {}, news: {}, backupCategory: "diary_local", backupCollectionKey: null, listeners: [], editId: null, editIndex: null, toastTimer: null };
 const sections = {
   inicio: { title: "Visão geral", subtitle: "Tudo que está em aberto ou vence hoje, em um só lugar.", add: "Nova tarefa", node: "tarefas", empty: "Nada pendente por aqui", emptyCopy: "Suas tarefas, cuidados e exercícios em aberto aparecerão nesta página." },
   tarefas: { title: "Suas tarefas", subtitle: "Organize o que importa e comemore cada avanço.", add: "Nova tarefa", node: "tarefas", empty: "Tudo começa com um primeiro passo", emptyCopy: "Adicione uma tarefa e ela aparecerá aqui e no aplicativo." },
@@ -268,7 +268,9 @@ function renderOverview() {
   }).sort((a,b)=>a.deadline-b.deadline).map(({care,deadline,label})=>row(care.id,care.name||"Cuidado pessoal",label,"<span class=\"tag-chip\">Cuidado</span>",{toggle:"care-toggle",kind:"cuidados",edit:true,urgency:care.hasTime?urgencyClass({hasDeadline:true,dueAt:deadline}):"urgency-none"}));
   const exerciseRows = exerciseGroupsForToday().filter((exercise)=>!exercise.completed).sort((a,b)=>a.dueAt-b.dueAt).map((exercise)=>row(exercise.id,exercise.name,exercise.dueText,`<span class="tag-chip">${exercise.type==="abc"?"Treino":"Exercício"}</span>`,{toggle:"exercise-toggle",kind:exercise.type==="abc"?"abc":"treinos_extras",edit:exercise.type==="extra",urgency:urgencyClass({hasDeadline:exercise.type==="extra"&&Number(exercise.exercise.deadlineHour)>=0,dueAt:exercise.dueAt})}));
   const noteRows = items("notas").filter(hasDue).sort((a,b)=>Number(a.dueAt)-Number(b.dueAt)).map((note)=>row(note.id,(note.text||"Nota").split("\n")[0],dueLabel(note.dueAt),"<span class=\"tag-chip\">Nota</span>",{kind:"notas",edit:true,delete:true,urgency:urgencyClass(note)}));
+  const challengeRows = items("desafio").filter((challenge)=>["disponivel","aceito"].includes(challenge.status)).sort((a,b)=>a.status === b.status ? Number(a.prazoFinalEm||a.expiraAceiteEm||0)-Number(b.prazoFinalEm||b.expiraAceiteEm||0) : a.status === "aceito" ? -1 : 1).map((challenge)=>renderChallengeCard(challenge));
   const groups = [
+    ["🏆 Desafios",challengeRows],
     ["Tarefas em aberto",taskRows],
     ["Notas com prazo",noteRows],
     ["Cuidados pessoais de hoje",careRows],
@@ -276,6 +278,35 @@ function renderOverview() {
   ];
   const html = groups.map(([title,rows])=>rows.length?`${sectionHeading(title,rows.length)}${rows.join("")}`:"").join("");
   return html ? [html] : [];
+}
+
+function renderChallengeCard(challenge) {
+  const active = challenge.status === "aceito";
+  const deadline = Number(active ? challenge.prazoFinalEm : challenge.expiraAceiteEm);
+  const unit = challenge.unidade === "seg" ? "segundos" : "repetições";
+  const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 60000));
+  const expired = !active && deadline > 0 && deadline <= Date.now();
+  const title = active ? "💪 Desafio ativo" : expired ? "Desafio expirado" : "🔥 Desafio surpresa";
+  const details = `${Number(challenge.meta)||0} ${unit} de ${challenge.exercicio || "exercício"} · ${Number(challenge.pontos)||0} pts`;
+  const when = active ? `Vence em: ${deadline ? `${localDate(deadline)} às ${new Date(deadline).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}` : "—"}` : expired ? "O tempo para aceitar terminou" : `Expira em ${remaining} min para aceitar`;
+  const actions = active
+    ? `<button class="challenge-action primary" data-action="challenge-complete" data-id="${escapeHtml(challenge.id)}">Marcar como feito</button>`
+    : expired ? "" : `<button class="challenge-action primary" data-action="challenge-accept" data-id="${escapeHtml(challenge.id)}">Aceitar</button><button class="challenge-action secondary" data-action="challenge-decline" data-id="${escapeHtml(challenge.id)}">Recusar</button>`;
+  return `<article class="challenge-card ${active ? "is-active" : ""}"><div class="challenge-copy"><strong>${title}</strong><span>${escapeHtml(details)}</span><small>${escapeHtml(when)}</small></div><div class="challenge-actions">${actions}</div></article>`;
+}
+
+async function updateChallenge(id, status) {
+  const challenge = state.data.desafio[id];
+  if (!challenge || !["disponivel","aceito"].includes(challenge.status)) return;
+  const now = Date.now();
+  if (status === "aceito" && Number(challenge.expiraAceiteEm) <= now) return message("O prazo para aceitar este desafio terminou.", true);
+  if (status === "recusado") return writeItem("desafio", id, { ...challenge, status, updatedAt: now });
+  if (status === "aceito") {
+    const days = Number(challenge.pontos) <= 5 ? 2 : Number(challenge.pontos) <= 8 ? 3 : Number(challenge.pontos) <= 11 ? 4 : Number(challenge.pontos) <= 14 ? 5 : Number(challenge.pontos) <= 17 ? 6 : 7;
+    const deadline = new Date(); deadline.setDate(deadline.getDate() + days); deadline.setHours(23, 0, 0, 0);
+    return writeItem("desafio", id, { ...challenge, status, aceitoEm: now, prazoFinalEm: deadline.getTime(), updatedAt: now });
+  }
+  if (status === "cumprido") return writeItem("desafio", id, { ...challenge, status, updatedAt: now });
 }
 
 function isAdmin() { return (state.user?.email || "").toLowerCase() === ADMIN_EMAIL; }
@@ -405,26 +436,32 @@ function decodeBackupValue(value) {
   try { return JSON.parse(value); } catch { return value; }
 }
 function backupCollection() {
-  const preference = state.backup[state.backupCategory] || {};
+  const preferenceName = state.backupCategory;
+  const preference = state.backup[preferenceName] || {};
   const routeTemplates = backupTemplates[state.backupCategory] || {};
   if (state.backupCollectionKey && preference[state.backupCollectionKey] != null) {
     const selected = decodeBackupValue(preference[state.backupCollectionKey]);
-    if (Array.isArray(selected)) return { preference, key: state.backupCollectionKey, records: selected };
+    if (Array.isArray(selected)) return { preferenceName, preference, key: state.backupCollectionKey, records: selected };
   }
-  if (state.backupCollectionKey && routeTemplates[state.backupCollectionKey]) return { preference, key: state.backupCollectionKey, records: [], template: routeTemplates[state.backupCollectionKey] };
+  if (state.backupCollectionKey && routeTemplates[state.backupCollectionKey]) return { preferenceName, preference, key: state.backupCollectionKey, records: [], template: routeTemplates[state.backupCollectionKey] };
   for (const [key, value] of Object.entries(preference)) {
     const decoded = decodeBackupValue(value);
-    if (Array.isArray(decoded)) { state.backupCollectionKey = key; return { preference, key, records: decoded }; }
+    if (Array.isArray(decoded)) { state.backupCollectionKey = key; return { preferenceName, preference, key, records: decoded }; }
   }
   const templateKey = state.backupCollectionKey && routeTemplates[state.backupCollectionKey] ? state.backupCollectionKey : Object.keys(routeTemplates)[0];
-  if (templateKey) { state.backupCollectionKey = templateKey; return { preference, key: templateKey, records: [], template: routeTemplates[templateKey] }; }
-  return { preference, key: Object.prototype.hasOwnProperty.call(preference, "entries") ? "entries" : "entries", records: [] };
+  if (templateKey) { state.backupCollectionKey = templateKey; return { preferenceName, preference, key: templateKey, records: [], template: routeTemplates[templateKey] }; }
+  return { preferenceName, preference, key: "entries", records: [] };
 }
 function backupCategories() {
   return Object.keys(backupLabels).filter((name) => state.backup[name] || ["diary_local","financas_local"].includes(name));
 }
 function recordTitle(record, index) {
   if (typeof record !== "object" || !record) return `Registro ${index + 1}`;
+  if (record.categoriaId) {
+    const moods = { muito_feliz: ["😊", "Muito feliz"], feliz: ["🙂", "Feliz"], tranquilo: ["😌", "Tranquilo"], confiante: ["😎", "Confiante"], motivado: ["🤩", "Motivado"], cansado: ["😴", "Cansado"], neutro: ["😐", "Neutro"], desanimado: ["😕", "Desanimado"], ansioso: ["😰", "Ansioso"], estressado: ["😤", "Estressado"], triste: ["😔", "Triste"], muito_triste: ["😭", "Muito triste"], irritado: ["😡", "Irritado"], grato: ["❤️", "Grato"] };
+    const [emoji, label] = moods[record.categoriaId] || ["", humanizeKey(String(record.categoriaId))];
+    return `${emoji} ${label}`.trim();
+  }
   return record.title || record.name || record.nome || record.text || record.titulo || record.exercicio || record.assunto || record.tipo || `Registro ${index + 1}`;
 }
 function renderBackupSection() {
@@ -438,7 +475,7 @@ function renderBackupSection() {
   $("#backup-categories").innerHTML = categories.map((name) => `<button class="category-pill ${name === state.backupCategory ? "selected" : ""}" data-backup-category="${name}">${escapeHtml(backupLabels[name])}</button>`).join("") + collections.map(([key]) => `<button class="category-pill ${key === collection.key ? "selected" : ""}" data-backup-key="${escapeHtml(key)}">${escapeHtml(humanizeKey(key))}</button>`).join("");
   const calorieSummary = state.backupCategory === "calorias_local" ? renderCalorieSummary() : "";
   return collection.records.map((record, index) => {
-    const preview = state.backupCategory === "calorias_local" ? calorieRecordSubtitle(record, collection.key) : typeof record === "object" && record ? Object.entries(record).filter(([key,value]) => key !== "id" && key !== "updatedAt" && value !== "" && value != null && typeof value !== "object").slice(0,3).map(([key,value]) => `${humanizeKey(key)}: ${String(value)}`).join(" · ") : String(record);
+    const preview = state.backupCategory === "calorias_local" ? calorieRecordSubtitle(record, collection.key) : state.backupCategory === "humor_local" && record && typeof record === "object" ? [`Intensidade ${record.intensidade ?? "—"}/5`, record.note, Number(record.date) > 0 ? localDate(record.date) : ""].filter(Boolean).join(" · ") : typeof record === "object" && record ? Object.entries(record).filter(([key,value]) => !["id","updatedAt","categoriaId"].includes(key) && value !== "" && value != null && typeof value !== "object").slice(0,3).map(([key,value]) => `${backupFieldLabel(key)}: ${String(value)}`).join(" · ") : String(record);
     return row(String(index), recordTitle(record,index), preview || "Registro salvo no backup do app", `<span class="tag-chip">${escapeHtml(backupLabels[state.backupCategory] || "App")}</span>`, { edit: true, delete: true });
   }).reduce((rows, item) => rows.concat(item), calorieSummary ? [calorieSummary] : []);
 }
@@ -529,10 +566,10 @@ async function saveBackupRecord(form) {
 }
 
 async function saveBackupCollection(collection) {
-  const pref = { ...(state.backup[collection.preference] || {}) };
+  const pref = { ...(state.backup[collection.preferenceName] || {}) };
   pref[collection.key] = JSON.stringify(collection.records);
-  state.backup[collection.preference] = pref;
-  await set(ref(database, `users/${state.user.uid}/webPatch/${collection.preference}/${collection.key}`), { value: pref[collection.key], updatedAt: Date.now() });
+  state.backup[collection.preferenceName] = pref;
+  await set(ref(database, `users/${state.user.uid}/webPatch/${collection.preferenceName}/${collection.key}`), { value: pref[collection.key], updatedAt: Date.now() });
 }
 
 async function deleteBackupRecord(index) {
@@ -693,7 +730,7 @@ onAuthStateChanged(auth, (user) => {
   state.user = user;
   $("#login").classList.toggle("hidden", !!user); $("#app").classList.toggle("hidden", !user);
   if (user) { const requested = location.hash.slice(1); if (sections[requested]) state.section = requested; updateAccount(user); attachLiveData(); render(); }
-  else { state.data = { tarefas: {}, notas: {}, cuidados: {}, agua: {}, treinos_extras: {}, exercicios_dias: {}, cuidados_dias: {} }; }
+  else { state.data = { tarefas: {}, notas: {}, cuidados: {}, agua: {}, treinos_extras: {}, exercicios_dias: {}, cuidados_dias: {}, desafio: {} }; }
 });
 
 function navigateTo(section) { state.section = section; state.filter = section === "tarefas" ? "ativas" : "todas"; state.backupCollectionKey = null; if (location.hash !== `#${section}`) history.replaceState(null, "", `#${section}`); render(); }
@@ -751,6 +788,12 @@ $("#list").addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action]"); if (!button) return;
   const { action, id } = button.dataset;
   try {
+    if (state.section === "inicio" && ["challenge-accept","challenge-decline","challenge-complete"].includes(action)) {
+      if (action === "challenge-accept") await updateChallenge(id, "aceito");
+      else if (action === "challenge-decline") await updateChallenge(id, "recusado");
+      else if (confirm("Marcar este desafio como cumprido? Os pontos serão enviados ao app.")) await updateChallenge(id, "cumprido");
+      return;
+    }
     if (state.section === "inicio") {
       const kind = button.closest("[data-kind]")?.dataset.kind;
       if (action === "edit" || action === "delete") {
