@@ -72,9 +72,11 @@ for (const [id, title] of androidSections) if (!sections[id] && backupSectionCon
 const backupLabels = { diary_local:"Diário", humor_local:"Humor", financas_local:"Finanças", dividas_local:"Dívidas", dividas_recorrentes_local:"Dívidas recorrentes", mensagens_local:"Mensagens", livros_local:"Livros", sono_local:"Sono", estudos_local:"Estudos", emprestimos_local:"Empréstimos", lembretes_local:"Lembretes", estoque_local:"Estoque", ferramentas_local:"Ferramentas", calorias_local:"Alimentação", historico_local:"Histórico", config_local:"Configurações", trabalho_local:"Trabalho", checklist_local:"Checklist diário", consertos_local:"Conserto celular", perdao_streak_local:"Sequências", agua_local:"Água", cuidados_local:"Cuidados", exercicios_local:"Exercícios", dividas_recorrentes_local:"Dívidas recorrentes" };
 const isBackupSection = (section = state.section) => !!sections[section]?.backupCategory;
 function buildNavigation() {
-  const navItems = [...androidSections, ["mais", "Mais dados", "•••"], ["noticias", "Notícias", "▣"]];
+  const primaryIds = new Set(["inicio","tarefas","cuidados","exercicios","agua","sono","financas","estudos","checklist","calorias","trabalho","conserto","livros","humor","diario","notas","ferramentas","opcoes"]);
+  const primaryItems = androidSections.filter(([id])=>primaryIds.has(id));
+  const navItems = [...primaryItems, ["areas", "Mais", "•••"]];
   $("#navigation").innerHTML = navItems.map(([id, label, icon]) => `<button data-section="${id}" class="nav-item"><span class="nav-icon">${icon}</span>${label}${id === "tarefas" ? ' <span id="nav-task-count" class="nav-count"></span>' : ""}</button>`).join("");
-  const moreItems = navItems.filter(([id]) => !["inicio", "tarefas", "cuidados", "agua"].includes(id));
+  const moreItems = [...androidSections.filter(([id])=>!primaryIds.has(id)), ["mais", "Mais dados", "•••"], ["noticias", "Notícias", "▣"]];
   $("#areas-grid").innerHTML = moreItems.map(([id, label, icon]) => `<button class="area-choice" data-section="${id}"><span>${icon}</span>${label}</button>`).join("");
 }
 buildNavigation();
@@ -154,6 +156,7 @@ function render() {
   const done = taskList.length - open;
   const progress = taskList.length ? Math.round(done * 100 / taskList.length) : 0;
   $("#open-count").textContent = open; $("#done-count").textContent = done; $("#progress-count").innerHTML = `${progress}<span class="small-unit">%</span>`;
+  renderAndroidStatus();
   const score = Math.max(0, Number(state.backup?.pontua_local?.score || 0));
   const rank = rankFor(score, Number(state.backup?.pontua_local?.patente_atual_nivel || 1));
   $("#score-total").textContent = `${Number(state.backup?.pontua_local?.score || 0)} pontos`;
@@ -181,6 +184,28 @@ function render() {
   }
   $("#list").innerHTML = rows.join("");
   $("#empty-state").classList.toggle("hidden", rows.length > 0);
+}
+
+function renderAndroidStatus() {
+  const moodLabels = { muito_feliz:"Muito feliz", feliz:"Feliz", tranquilo:"Tranquilo", confiante:"Confiante", motivado:"Motivado", cansado:"Cansado", neutro:"Neutro", desanimado:"Desanimado", ansioso:"Ansioso", estressado:"Estressado", triste:"Triste", muito_triste:"Muito triste", irritado:"Irritado", grato:"Grato" };
+  const moodEmojis = { muito_feliz:"😊", feliz:"🙂", tranquilo:"😌", confiante:"😎", motivado:"🤩", cansado:"😴", neutro:"😐", desanimado:"😕", ansioso:"😰", estressado:"😤", triste:"😔", muito_triste:"😭", irritado:"😡", grato:"❤️" };
+  const moodEntries = decodePref("humor_local", "entries", []);
+  const latestMood = [...(Array.isArray(moodEntries) ? moodEntries : [])].sort((a,b)=>Number(b.date||0)-Number(a.date||0))[0];
+  $("#status-mood").textContent = latestMood ? `${moodEmojis[latestMood.categoriaId] || "🙂"} ${moodLabels[latestMood.categoriaId] || "Registrado"}` : "—";
+  $("#status-mood-time").textContent = latestMood?.date ? new Intl.DateTimeFormat("pt-BR",{hour:"2-digit",minute:"2-digit"}).format(new Date(Number(latestMood.date))) : "Registrar agora";
+  const score = Math.max(0, Number(state.backup?.pontua_local?.score || 0));
+  const level = rankFor(score, Number(state.backup?.pontua_local?.patente_atual_nivel || 1));
+  $("#status-points").textContent = score.toLocaleString("pt-BR");
+  $("#status-rank").textContent = LEVEL_NAMES[level - 1];
+  const finance = decodePref("financas_local", "entries", []);
+  const balance = (Array.isArray(finance) ? finance : []).reduce((sum, entry)=>sum + (entry.type === "entrada" ? 1 : -1) * Number(entry.amount || 0),0);
+  $("#status-balance").textContent = new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(balance);
+  const today = localDayKey();
+  const waterTotal = items("agua").filter((entry)=>Number(entry.date)>0&&localDayKey(new Date(Number(entry.date)))===today).reduce((sum,entry)=>sum+Number(entry.amountMl||0),0);
+  const goal = Math.max(1,Number(decodePref("agua_local","metaMl",2000)||2000));
+  const waterProgress = Math.min(999,Math.floor(waterTotal*100/goal));
+  $("#status-water").textContent = `${waterProgress}%`;
+  $("#status-water-detail").textContent = `${(waterTotal/1000).toLocaleString("pt-BR",{maximumFractionDigits:2})} / ${(goal/1000).toLocaleString("pt-BR")} L`;
 }
 
 function row(id, title, subtitle, trailing = "", options = {}) {
@@ -430,6 +455,19 @@ function calorieRecordSubtitle(record, key) {
 function humanizeKey(key) {
   return key.replace(/([a-z])([A-Z])/g,"$1 $2").replace(/_/g," ").replace(/^./,(letter)=>letter.toUpperCase());
 }
+const BACKUP_FIELD_LABELS = { body:"Texto", date:"Data e horário", dueAt:"Prazo", name:"Nome", nome:"Nome", title:"Título", text:"Texto", hours:"Horas dormidas", quality:"Qualidade do sono", amount:"Valor", amountMl:"Quantidade (ml)", categoriaId:"Como você está se sentindo?", intensidade:"Intensidade", note:"Observação", calorias:"Calorias (kcal)", carboidratos:"Carboidratos (g)", proteinas:"Proteínas (g)", gorduras:"Gorduras (g)", tipo:"Tipo", quantidade:"Porções", totalPages:"Total de páginas", pagesRead:"Páginas lidas", finished:"Concluído", rating:"Avaliação", review:"Resenha", etapa:"Etapa", finalizado:"Entregue", temPrazo:"Tem prazo", prazo:"Prazo", observacao:"Observação", valorGasto:"Valor gasto", valorGanho:"Valor recebido", installmentValue:"Valor da parcela", totalInstallments:"Número de parcelas", dueDay:"Dia do vencimento", installmentsPaid:"Parcelas pagas", timeInMillis:"Data e horário", enabled:"Ativo", repeat:"Repetição", km:"Quilometragem", litros:"Litros", limiteInicial:"Limite inicial", produto:"Produto", valorCompra:"Valor da compra", parcelas:"Número de parcelas", taxaJuros:"Juros (%)", vencimento:"Vencimento", pago:"Pago", temValidade:"Tem validade", validade:"Validade", categoria:"Categoria", quantity:"Quantidade" };
+function backupFieldLabel(key) { return BACKUP_FIELD_LABELS[key] || humanizeKey(key); }
+function backupSelectOptions(category, collectionKey, key) {
+  if (category === "humor_local" && key === "categoriaId") return [["muito_feliz","😊 Muito feliz"],["feliz","🙂 Feliz"],["tranquilo","😌 Tranquilo"],["confiante","😎 Confiante"],["motivado","🤩 Motivado"],["cansado","😴 Cansado"],["neutro","😐 Neutro"],["desanimado","😕 Desanimado"],["ansioso","😰 Ansioso"],["estressado","😤 Estressado"],["triste","😔 Triste"],["muito_triste","😭 Muito triste"],["irritado","😡 Irritado"],["grato","❤️ Grato"]];
+  if (category === "calorias_local" && key === "tipo") return [["cafe","Café da manhã"],["almoco","Almoço"],["jantar","Jantar"],["lanche","Lanche"]];
+  if (category === "financas_local" && key === "type") return [["entrada","Entrada"],["gasto","Gasto"]];
+  if (category === "sono_local" && key === "quality") return [[1,"Muito ruim"],[2,"Ruim"],[3,"Regular"],[4,"Boa"],[5,"Muito boa"]];
+  if (category === "lembretes_local" && key === "repeat") return [["NONE","Não repetir"],["DAILY","Todos os dias"],["WEEKLY","Toda semana"]];
+  if (category === "consertos_local" && key === "etapa") return [[0,"Recebido"],[1,"Diagnóstico"],[2,"Em conserto"],[3,"Pronto"],[4,"Entregue"]];
+  if (category === "livros_local" && key === "rating") return [[0,"Sem avaliação"],[1,"1 estrela"],[2,"2 estrelas"],[3,"3 estrelas"],[4,"4 estrelas"],[5,"5 estrelas"]];
+  if (category === "humor_local" && key === "intensidade") return [1,2,3,4,5].map((value)=>[value,`${value} de 5`]);
+  return null;
+}
 
 function openBackupDialog(index = null) {
   const collection = backupCollection();
@@ -441,7 +479,9 @@ function openBackupDialog(index = null) {
   $("#delete-button").classList.toggle("hidden", !old);
   $("#dialog-fields").innerHTML = Object.entries(model).filter(([key]) => key !== "id" && key !== "updatedAt").map(([key,value]) => {
     const name = `backup_${key}`;
-    const label = humanizeKey(key);
+    const label = backupFieldLabel(key);
+    const options = backupSelectOptions(state.backupCategory, collection.key, key);
+    if (options) return `<label class="field">${escapeHtml(label)}<select name="${name}">${options.map(([option,label])=>`<option value="${escapeHtml(option)}" ${String(value)===String(option)?"selected":""}>${escapeHtml(label)}</option>`).join("")}</select></label>`;
     if (typeof value === "boolean") return `<label class="checkbox-field"><input name="${name}" type="checkbox" ${value ? "checked" : ""} /> ${escapeHtml(label)}</label>`;
     if (value != null && typeof value === "object") return `<label class="field">${escapeHtml(label)}<textarea name="${name}" data-json-field="true">${escapeHtml(JSON.stringify(value))}</textarea></label>`;
     if (typeof value === "number" && value > 1000000000000 && /(date|time|deadline|createdat|completedat|timestamp)/i.test(key)) {
@@ -647,7 +687,8 @@ onAuthStateChanged(auth, (user) => {
 });
 
 function navigateTo(section) { state.section = section; state.filter = "todas"; state.backupCollectionKey = null; if (location.hash !== `#${section}`) history.replaceState(null, "", `#${section}`); render(); }
-$("#navigation").addEventListener("click", (event) => { const button = event.target.closest("[data-section]"); if (button) navigateTo(button.dataset.section); });
+$("#navigation").addEventListener("click", (event) => { const button = event.target.closest("[data-section]"); if (!button) return; if (button.dataset.section === "areas") { $("#areas-dialog").showModal(); return; } navigateTo(button.dataset.section); });
+$("#android-status-panel").addEventListener("click", (event) => { const button = event.target.closest("[data-status-section]"); if (button && sections[button.dataset.statusSection]) navigateTo(button.dataset.statusSection); });
 $("#mobile-navigation").addEventListener("click", (event) => { const button = event.target.closest("[data-section]"); if (button) navigateTo(button.dataset.section); });
 $("#mobile-more-button").addEventListener("click", () => $("#areas-dialog").showModal());
 $("#areas-close").addEventListener("click", () => $("#areas-dialog").close());
