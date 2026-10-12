@@ -70,3 +70,4 @@ body{background:#4ebee0}
   .topbar{height:51px}.android-status-panel{grid-template-columns:repeat(4,minmax(88px,1fr));margin-top:9px;overflow-x:auto}.android-status-cell{padding:6px 4px}.android-status-cell small{font-size:7px}.android-status-cell strong{font-size:12px}.android-status-cell span{font-size:8px}
   .welcome-row{padding:22px 0 16px}.welcome-row h1{font-size:22px}.overview-grid{margin-bottom:12px}.stat-card{box-shadow:none}.content-card{box-shadow:0 4px 16px #144b6012}
 }
+.points-positive{background:#e4f4e8;color:#31824a}.points-negative{background:#fff0ec;color:#b14d3b}

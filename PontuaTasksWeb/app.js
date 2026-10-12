@@ -11,7 +11,7 @@ const ADMIN_EMAIL = "sotrabalho683@gmail.com";
 const LEVEL_THRESHOLDS = [0,50,100,180,280,400,550,750,1000,1300,1650,2050,2500,3000,3550,4150,4800,5500];
 const LEVEL_FLOORS = [0,35,70,140,220,330,470,650,880,1150,1450,1800,2200,2650,3150,3700,4300,4800];
 const LEVEL_NAMES = ["Recruta","Soldado","Cabo","3º Sargento","2º Sargento","1º Sargento","Subtenente","Aspirante","2º Tenente","1º Tenente","Capitão","Major","Tenente-Coronel","Coronel","General de Brigada","General de Divisão","General de Exército","General"];
-const state = { user: null, section: "inicio", filter: "todas", data: { tarefas: {}, notas: {}, cuidados: {}, agua: {}, treinos_extras: {}, exercicios_dias: {}, cuidados_dias: {} }, backup: {}, news: {}, backupCategory: "diary_local", backupCollectionKey: null, listeners: [], editId: null, editIndex: null, toastTimer: null };
+const state = { user: null, section: "inicio", filter: "ativas", data: { tarefas: {}, notas: {}, cuidados: {}, agua: {}, treinos_extras: {}, exercicios_dias: {}, cuidados_dias: {} }, backup: {}, news: {}, backupCategory: "diary_local", backupCollectionKey: null, listeners: [], editId: null, editIndex: null, toastTimer: null };
 const sections = {
   inicio: { title: "Visão geral", subtitle: "Tudo que está em aberto ou vence hoje, em um só lugar.", add: "Nova tarefa", node: "tarefas", empty: "Nada pendente por aqui", emptyCopy: "Suas tarefas, cuidados e exercícios em aberto aparecerão nesta página." },
   tarefas: { title: "Suas tarefas", subtitle: "Organize o que importa e comemore cada avanço.", add: "Nova tarefa", node: "tarefas", empty: "Tudo começa com um primeiro passo", emptyCopy: "Adicione uma tarefa e ela aparecerá aqui e no aplicativo." },
@@ -72,7 +72,7 @@ for (const [id, title] of androidSections) if (!sections[id] && backupSectionCon
 const backupLabels = { diary_local:"Diário", humor_local:"Humor", financas_local:"Finanças", dividas_local:"Dívidas", dividas_recorrentes_local:"Dívidas recorrentes", mensagens_local:"Mensagens", livros_local:"Livros", sono_local:"Sono", estudos_local:"Estudos", emprestimos_local:"Empréstimos", lembretes_local:"Lembretes", estoque_local:"Estoque", ferramentas_local:"Ferramentas", calorias_local:"Alimentação", historico_local:"Histórico", config_local:"Configurações", trabalho_local:"Trabalho", checklist_local:"Checklist diário", consertos_local:"Conserto celular", perdao_streak_local:"Sequências", agua_local:"Água", cuidados_local:"Cuidados", exercicios_local:"Exercícios", dividas_recorrentes_local:"Dívidas recorrentes" };
 const isBackupSection = (section = state.section) => !!sections[section]?.backupCategory;
 function buildNavigation() {
-  const primaryIds = new Set(["inicio","tarefas","cuidados","exercicios","agua","sono","financas","estudos","checklist","calorias","trabalho","conserto","livros","humor","diario","notas","ferramentas","opcoes"]);
+  const primaryIds = new Set(["inicio","tarefas","cuidados","exercicios","agua","sono","financas","estudos","checklist","calorias","trabalho","conserto","livros","humor","diario","ferramentas","opcoes"]);
   const primaryItems = androidSections.filter(([id])=>primaryIds.has(id));
   const navItems = [...primaryItems, ["areas", "Mais", "•••"]];
   $("#navigation").innerHTML = navItems.map(([id, label, icon]) => `<button data-section="${id}" class="nav-item"><span class="nav-icon">${icon}</span>${label}${id === "tarefas" ? ' <span id="nav-task-count" class="nav-count"></span>' : ""}</button>`).join("");
@@ -347,8 +347,18 @@ async function compressNewsImage(file) {
 }
 
 function renderTasks() {
-  const all = items("tarefas").sort((a, b) => Number(a.done) - Number(b.done) || dueSort(a) - dueSort(b));
-  return all.filter((task) => state.filter === "todas" || (state.filter === "abertas" ? !task.done : task.done)).map((task) => {
+  if (state.filter === "historico") {
+    const history = decodePref("historico_local", "entries", []);
+    const rows = (Array.isArray(history) ? history : []).slice().sort((a,b)=>Number(b.timestamp||0)-Number(a.timestamp||0));
+    return rows.map((entry,index)=>{
+      const date = Number(entry.timestamp)>0 ? new Intl.DateTimeFormat("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}).format(new Date(Number(entry.timestamp))) : "";
+      const status = entry.status === "concluida" ? "Concluída" : entry.status === "perdida" ? "Perdida" : entry.status === "penalizada" ? "Penalidade" : entry.status || "Registro";
+      const points = Number(entry.points||0);
+      return row(entry.taskId||String(index),entry.title||"Tarefa",`${status}${date?` · ${date}`:""}`,`<span class="status-chip ${points>0?"points-positive":points<0?"points-negative":""}">${points>0?"+":""}${points} pts</span>`);
+    });
+  }
+  const all = items("tarefas").filter((task)=>!task.done).sort((a, b) => dueSort(a) - dueSort(b));
+  return all.map((task) => {
     const subtitle = [task.description, task.hasDeadline && task.dueAt ? `Prazo ${localDate(task.dueAt)}` : "Sem prazo", task.tags ? `# ${task.tags}` : ""].filter(Boolean).join(" · ");
     const level = Number(task.priority || 0);
     const priority = `<span class="priority-chip ${level >= 2 ? "high" : level === 1 ? "medium" : ""}">● ${priorityName(level)}</span>`;
@@ -686,7 +696,7 @@ onAuthStateChanged(auth, (user) => {
   else { state.data = { tarefas: {}, notas: {}, cuidados: {}, agua: {}, treinos_extras: {}, exercicios_dias: {}, cuidados_dias: {} }; }
 });
 
-function navigateTo(section) { state.section = section; state.filter = "todas"; state.backupCollectionKey = null; if (location.hash !== `#${section}`) history.replaceState(null, "", `#${section}`); render(); }
+function navigateTo(section) { state.section = section; state.filter = section === "tarefas" ? "ativas" : "todas"; state.backupCollectionKey = null; if (location.hash !== `#${section}`) history.replaceState(null, "", `#${section}`); render(); }
 $("#navigation").addEventListener("click", (event) => { const button = event.target.closest("[data-section]"); if (!button) return; if (button.dataset.section === "areas") { $("#areas-dialog").showModal(); return; } navigateTo(button.dataset.section); });
 $("#android-status-panel").addEventListener("click", (event) => { const button = event.target.closest("[data-status-section]"); if (button && sections[button.dataset.statusSection]) navigateTo(button.dataset.statusSection); });
 $("#mobile-navigation").addEventListener("click", (event) => { const button = event.target.closest("[data-section]"); if (button) navigateTo(button.dataset.section); });
